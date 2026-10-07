@@ -26,9 +26,9 @@ import {
 import {
   getShopTimezoneOffsetMinutes,
   getTieredDiscount,
-  toDiscountGid,
   updateTieredDiscount,
 } from "../models/discounts.server";
+import { toDiscountGid } from "../lib/discount-id";
 
 export const loader = async ({ request, params }: LoaderFunctionArgs) => {
   const { admin } = await authenticate.admin(request);

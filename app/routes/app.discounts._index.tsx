@@ -8,10 +8,12 @@ import { authenticate } from "../shopify.server";
 import {
   getShopTimezoneOffsetMinutes,
   listTieredDiscounts,
-  toDiscountNumericId,
-  type DiscountStatus,
-  type TieredDiscount,
 } from "../models/discounts.server";
+import type {
+  DiscountStatus,
+  TieredDiscount,
+} from "../models/discounts.server";
+import { toDiscountNumericId } from "../lib/discount-id";
 import { formatShopDate } from "../lib/shop-time";
 import { summarizeTiers } from "../lib/tiers";
 

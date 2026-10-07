@@ -340,17 +340,3 @@ export async function updateTieredDiscount(
 
   return { ok: true, id: payload.automaticAppDiscount.discountId };
 }
-
-const DISCOUNT_GID_PREFIX = "gid://shopify/DiscountAutomaticNode/";
-
-/** The trailing number of a discount gid, used in app URLs. */
-export function toDiscountNumericId(gid: string): string {
-  return gid.split("/").pop() ?? gid;
-}
-
-/** Rebuilds a gid from a URL parameter, or null when it is not a number. */
-export function toDiscountGid(numericId: string | undefined): string | null {
-  if (!numericId || !/^\d+$/.test(numericId)) return null;
-
-  return `${DISCOUNT_GID_PREFIX}${numericId}`;
-}
