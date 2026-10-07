@@ -4,7 +4,13 @@ import type {
   HeadersFunction,
   LoaderFunctionArgs,
 } from "react-router";
-import { redirect, useFetcher, useLoaderData, useRouteError } from "react-router";
+import {
+  isRouteErrorResponse,
+  redirect,
+  useFetcher,
+  useLoaderData,
+  useRouteError,
+} from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 
 import { authenticate } from "../shopify.server";
@@ -211,7 +217,35 @@ export default function EditDiscountPage() {
 }
 
 export function ErrorBoundary() {
-  return boundary.error(useRouteError());
+  const error = useRouteError();
+
+  // A deleted discount, or an ID that belongs to something else, should read
+  // as a dead end rather than as a crash. Everything else, including the
+  // responses Shopify throws during authentication, goes to their boundary.
+  if (isRouteErrorResponse(error) && error.status === 404) {
+    return (
+      <s-page heading="Discount not found">
+        <s-link slot="breadcrumb-actions" href="/app/discounts">
+          Discounts
+        </s-link>
+
+        <s-section>
+          <s-stack direction="block" gap="base">
+            <s-paragraph>
+              This discount no longer exists, or it was not created by this app.
+            </s-paragraph>
+            <s-stack direction="inline">
+              <s-button variant="primary" href="/app/discounts">
+                Back to discounts
+              </s-button>
+            </s-stack>
+          </s-stack>
+        </s-section>
+      </s-page>
+    );
+  }
+
+  return boundary.error(error);
 }
 
 export const headers: HeadersFunction = (headersArgs) => {
