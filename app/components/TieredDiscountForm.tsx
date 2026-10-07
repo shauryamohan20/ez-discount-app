@@ -8,7 +8,12 @@ import {
   type ResourceRef,
   type TierRowValues,
 } from "../lib/discount-form";
-import { MAX_TIERS, type AppliesToType } from "../lib/tiers";
+import {
+  CUSTOMER_ELIGIBILITY_LABELS,
+  MAX_TIERS,
+  isCustomerEligibility,
+  type AppliesToType,
+} from "../lib/tiers";
 
 type Props = {
   values: DiscountFormValues;
@@ -214,6 +219,47 @@ export function TieredDiscountForm({
                 ))
               )}
             </s-stack>
+          )}
+        </s-stack>
+      </s-section>
+
+      <s-section heading="Eligible customers">
+        <s-stack direction="block" gap="base">
+          <s-select
+            label="Who can use this discount"
+            name="customerEligibility"
+            value={values.customerEligibility}
+            {...(disabled ? { disabled: true } : {})}
+            onChange={(event) => {
+              const next = event.currentTarget.value;
+              if (isCustomerEligibility(next)) {
+                update({ customerEligibility: next });
+              }
+            }}
+          >
+            <s-option value="all">
+              {CUSTOMER_ELIGIBILITY_LABELS.all}
+            </s-option>
+            <s-option value="signedIn">
+              {CUSTOMER_ELIGIBILITY_LABELS.signedIn}
+            </s-option>
+            <s-option value="firstOrder">
+              {CUSTOMER_ELIGIBILITY_LABELS.firstOrder}
+            </s-option>
+            <s-option value="returning">
+              {CUSTOMER_ELIGIBILITY_LABELS.returning}
+            </s-option>
+          </s-select>
+
+          {values.customerEligibility !== "all" && (
+            <s-banner tone="info">
+              <s-paragraph>
+                A cart only qualifies once Shopify knows who the customer is.
+                An automatic discount will not apply to a shopper who is
+                browsing anonymously until they sign in or identify themselves
+                at checkout.
+              </s-paragraph>
+            </s-banner>
           )}
         </s-stack>
       </s-section>

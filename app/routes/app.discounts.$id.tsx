@@ -82,6 +82,8 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
     appliesToType: appliesTo.type,
     products: appliesTo.type === "products" ? resources : [],
     collections: appliesTo.type === "collections" ? resources : [],
+    customerEligibility:
+      config.status === "ok" ? config.customerEligibility : "all",
     tiers:
       config.status === "ok" ? config.tiers.map(tierToRow) : [emptyTierRow()],
   };
@@ -110,8 +112,15 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
 
   try {
     const offsetMinutes = await getShopTimezoneOffsetMinutes(admin);
-    const { title, startDate, endDate, combinesWithShipping, appliesTo, tiers } =
-      validation.value;
+    const {
+      title,
+      startDate,
+      endDate,
+      combinesWithShipping,
+      appliesTo,
+      customerEligibility,
+      tiers,
+    } = validation.value;
 
     const result = await updateTieredDiscount(admin, id, {
       title,
@@ -121,6 +130,7 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
         : null,
       combinesWithShipping,
       appliesTo,
+      customerEligibility,
       tiers,
     });
 
@@ -175,6 +185,7 @@ export default function EditDiscountPage() {
         endDate: values.endDate,
         combinesWithShipping: String(values.combinesWithShipping),
         appliesToType: values.appliesToType,
+        customerEligibility: values.customerEligibility,
         products: JSON.stringify(values.products),
         collections: JSON.stringify(values.collections),
         tiers: JSON.stringify(values.tiers),

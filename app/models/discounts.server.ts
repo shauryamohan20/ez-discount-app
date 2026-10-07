@@ -10,6 +10,7 @@ import {
   serializeInputVariables,
   serializeTierConfig,
   type AppliesTo,
+  type CustomerEligibility,
   type Tier,
   type TierConfig,
 } from "../lib/tiers";
@@ -218,6 +219,7 @@ export type TieredDiscountInput = {
   endsAt: string | null;
   combinesWithShipping: boolean;
   appliesTo: AppliesTo;
+  customerEligibility: CustomerEligibility;
   tiers: Tier[];
 };
 
@@ -264,7 +266,11 @@ function toDiscountInput(input: TieredDiscountInput) {
         namespace: TIER_METAFIELD_NAMESPACE,
         key: TIER_METAFIELD_KEY,
         type: TIER_METAFIELD_TYPE,
-        value: serializeTierConfig(input.tiers, input.appliesTo),
+        value: serializeTierConfig(
+          input.tiers,
+          input.appliesTo,
+          input.customerEligibility,
+        ),
       },
       {
         namespace: TIER_METAFIELD_NAMESPACE,

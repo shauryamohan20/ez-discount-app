@@ -44,8 +44,15 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
   try {
     const offsetMinutes = await getShopTimezoneOffsetMinutes(admin);
-    const { title, startDate, endDate, combinesWithShipping, appliesTo, tiers } =
-      validation.value;
+    const {
+      title,
+      startDate,
+      endDate,
+      combinesWithShipping,
+      appliesTo,
+      customerEligibility,
+      tiers,
+    } = validation.value;
 
     const result = await createTieredDiscount(admin, {
       title,
@@ -55,6 +62,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         : null,
       combinesWithShipping,
       appliesTo,
+      customerEligibility,
       tiers,
     });
 
@@ -110,6 +118,7 @@ export default function NewDiscountPage() {
         endDate: values.endDate,
         combinesWithShipping: String(values.combinesWithShipping),
         appliesToType: values.appliesToType,
+        customerEligibility: values.customerEligibility,
         products: JSON.stringify(values.products),
         collections: JSON.stringify(values.collections),
         tiers: JSON.stringify(values.tiers),

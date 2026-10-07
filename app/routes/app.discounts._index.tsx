@@ -27,7 +27,11 @@ import type {
 } from "../models/discounts.server";
 import { toDiscountGid, toDiscountNumericId } from "../lib/discount-id";
 import { formatShopDate } from "../lib/shop-time";
-import { summarizeAppliesTo, summarizeTiers } from "../lib/tiers";
+import {
+  CUSTOMER_ELIGIBILITY_LABELS,
+  summarizeAppliesTo,
+  summarizeTiers,
+} from "../lib/tiers";
 
 const CONFIRM_MODAL_ID = "confirm-discount-action";
 
@@ -291,6 +295,11 @@ export default function DiscountsPage() {
                           <s-text>{summarizeTiers(discount.config.tiers)}</s-text>
                           <s-text color="subdued">
                             {summarizeAppliesTo(discount.config.appliesTo)}
+                            {discount.config.customerEligibility === "all"
+                              ? ""
+                              : ` to ${CUSTOMER_ELIGIBILITY_LABELS[
+                                  discount.config.customerEligibility
+                                ].toLowerCase()}`}
                           </s-text>
                         </s-stack>
                       ) : (

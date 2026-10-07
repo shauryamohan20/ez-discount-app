@@ -1,5 +1,11 @@
 query CartInput($collectionIds: [ID!] = []) {
   cart {
+    buyerIdentity {
+      isAuthenticated
+      customer {
+        numberOfOrders
+      }
+    }
     lines {
       id
       quantity

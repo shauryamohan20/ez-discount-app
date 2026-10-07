@@ -11,8 +11,9 @@ import {
  *
  * Version 1 tiers only had minQuantity and percentage and were always open
  * ended. Version 2 added maxQuantity and maxDiscountedUnits. Version 3 added
- * appliesTo. Every added field is optional here, so a config written by any
- * earlier version of the app still behaves the way it did then.
+ * appliesTo. Version 4 added customerEligibility. Every added field is
+ * optional here, so a config written by any earlier version of the app still
+ * behaves the way it did then.
  */
 type Tier = {
   minQuantity: number;
@@ -26,12 +27,42 @@ type AppliesTo = {
   productIds?: string[] | null;
 };
 
+type CustomerEligibility = 'all' | 'signedIn' | 'firstOrder' | 'returning';
+
 type TierConfig = {
   tiers?: Tier[];
   appliesTo?: AppliesTo | null;
+  customerEligibility?: CustomerEligibility | null;
 };
 
 type Line = CartInput['cart']['lines'][number];
+type BuyerIdentity = CartInput['cart']['buyerIdentity'];
+
+/**
+ * A cart with no identified customer cannot satisfy any rule that depends on
+ * who the buyer is. That is not an edge case: an automatic discount runs on
+ * anonymous carts too, and such a cart has no order history to read, so a
+ * first order discount simply does not apply until the buyer is known.
+ */
+function isCustomerEligible(
+  buyerIdentity: BuyerIdentity,
+  rule: CustomerEligibility | null | undefined,
+): boolean {
+  switch (rule) {
+    case 'signedIn':
+      return buyerIdentity?.isAuthenticated === true;
+    case 'firstOrder': {
+      const customer = buyerIdentity?.customer;
+      return !!customer && customer.numberOfOrders === 0;
+    }
+    case 'returning': {
+      const customer = buyerIdentity?.customer;
+      return !!customer && customer.numberOfOrders > 0;
+    }
+    default:
+      return true;
+  }
+}
 
 /**
  * Which cart lines this discount is allowed to touch. Collection membership is
@@ -140,6 +171,10 @@ export function cartLinesDiscountsGenerateRun(
     | undefined;
   const tiers = config?.tiers;
   if (!Array.isArray(tiers) || tiers.length === 0) {
+    return {operations: []};
+  }
+
+  if (!isCustomerEligible(input.cart.buyerIdentity, config?.customerEligibility)) {
     return {operations: []};
   }
 

@@ -4,6 +4,7 @@
     "target": "cart.lines.discounts.generate.run",
     "input": {
       "cart": {
+        "buyerIdentity": null,
         "lines": []
       },
       "discount": {

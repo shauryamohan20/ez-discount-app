@@ -1,9 +1,11 @@
 import { isCalendarDate } from "./shop-time";
 import {
   MAX_TIERS,
+  isCustomerEligibility,
   sortTiers,
   type AppliesTo,
   type AppliesToType,
+  type CustomerEligibility,
   type Tier,
 } from "./tiers";
 
@@ -33,6 +35,7 @@ export type DiscountFormValues = {
   appliesToType: AppliesToType;
   products: ResourceRef[];
   collections: ResourceRef[];
+  customerEligibility: CustomerEligibility;
   tiers: TierRowValues[];
 };
 
@@ -58,6 +61,7 @@ export type ValidatedDiscount = {
   endDate: string | null;
   combinesWithShipping: boolean;
   appliesTo: AppliesTo;
+  customerEligibility: CustomerEligibility;
   tiers: Tier[];
 };
 
@@ -95,6 +99,7 @@ export function blankDiscountForm(startDate: string): DiscountFormValues {
     appliesToType: "all",
     products: [],
     collections: [],
+    customerEligibility: "all",
     tiers: [
       {
         minQuantity: "2",
@@ -298,6 +303,7 @@ export function validateDiscountForm(
             ? values.collections.map((collection) => collection.id)
             : [],
       },
+      customerEligibility: values.customerEligibility,
       tiers: sortTiers(parsed.map((row) => row.tier)),
     },
   };
@@ -325,6 +331,7 @@ export function discountFormValuesFromFormData(
   }
 
   const appliesToType = String(formData.get("appliesToType") ?? "all");
+  const customerEligibility = formData.get("customerEligibility");
 
   return {
     title: String(formData.get("title") ?? ""),
@@ -337,6 +344,9 @@ export function discountFormValuesFromFormData(
         : "all",
     products: resourceRefsFromFormData(formData, "products"),
     collections: resourceRefsFromFormData(formData, "collections"),
+    customerEligibility: isCustomerEligibility(customerEligibility)
+      ? customerEligibility
+      : "all",
     tiers,
   };
 }

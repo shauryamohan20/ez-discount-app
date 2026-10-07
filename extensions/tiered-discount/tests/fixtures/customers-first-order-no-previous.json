@@ -4,11 +4,16 @@
     "target": "cart.lines.discounts.generate.run",
     "input": {
       "cart": {
-        "buyerIdentity": null,
+        "buyerIdentity": {
+          "isAuthenticated": true,
+          "customer": {
+            "numberOfOrders": 0
+          }
+        },
         "lines": [
           {
             "id": "gid://shopify/CartLine/0",
-            "quantity": 6,
+            "quantity": 3,
             "merchandise": {
               "__typename": "ProductVariant",
               "id": "gid://shopify/ProductVariant/100",
@@ -26,20 +31,27 @@
         ],
         "metafield": {
           "jsonValue": {
-            "version": 3,
+            "version": 4,
             "tiers": [
+              {
+                "minQuantity": 2,
+                "maxQuantity": 4,
+                "percentage": 10,
+                "maxDiscountedUnits": null
+              },
               {
                 "minQuantity": 5,
                 "maxQuantity": null,
                 "percentage": 20,
-                "maxDiscountedUnits": 2
+                "maxDiscountedUnits": null
               }
             ],
             "appliesTo": {
               "type": "all",
               "productIds": [],
               "collectionIds": []
-            }
+            },
+            "customerEligibility": "firstOrder"
           }
         }
       }
@@ -50,18 +62,17 @@
           "productDiscountsAdd": {
             "candidates": [
               {
-                "message": "20% OFF",
+                "message": "10% OFF",
                 "targets": [
                   {
                     "cartLine": {
-                      "id": "gid://shopify/CartLine/0",
-                      "quantity": 2
+                      "id": "gid://shopify/CartLine/0"
                     }
                   }
                 ],
                 "value": {
                   "percentage": {
-                    "value": "20"
+                    "value": "10"
                   }
                 }
               }

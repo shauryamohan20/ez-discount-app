@@ -28,6 +28,7 @@ export const DISCOUNT_FUNCTION_HANDLE = "tiered-discount";
  * 1: tiers of { minQuantity, percentage }, always open ended.
  * 2: tiers gain maxQuantity and maxDiscountedUnits, both nullable.
  * 3: adds appliesTo, which defaults to every product.
+ * 4: adds customerEligibility, which defaults to every customer.
  *
  * Each added field is optional, so a config written by an earlier version
  * keeps the behaviour it had then and is rewritten at the current version the
@@ -35,7 +36,7 @@ export const DISCOUNT_FUNCTION_HANDLE = "tiered-discount";
  * Discounts saved by a newer version are reported as unsupported rather than
  * edited with the wrong assumptions.
  */
-export const TIER_CONFIG_VERSION = 3;
+export const TIER_CONFIG_VERSION = 4;
 
 export const MAX_TIERS = 10;
 
@@ -64,8 +65,40 @@ export const ALL_PRODUCTS: AppliesTo = {
   collectionIds: [],
 };
 
+/** Who the discount is for. Evaluated by the Function, not by Shopify. */
+export type CustomerEligibility =
+  | "all"
+  | "signedIn"
+  | "firstOrder"
+  | "returning";
+
+export const CUSTOMER_ELIGIBILITY_LABELS: Record<CustomerEligibility, string> =
+  {
+    all: "All customers",
+    signedIn: "Signed in customers",
+    firstOrder: "Customers with no previous orders",
+    returning: "Customers with at least one previous order",
+  };
+
+export function isCustomerEligibility(
+  value: unknown,
+): value is CustomerEligibility {
+  return (
+    value === "all" ||
+    value === "signedIn" ||
+    value === "firstOrder" ||
+    value === "returning"
+  );
+}
+
 export type TierConfig =
-  | { status: "ok"; version: number; tiers: Tier[]; appliesTo: AppliesTo }
+  | {
+      status: "ok";
+      version: number;
+      tiers: Tier[];
+      appliesTo: AppliesTo;
+      customerEligibility: CustomerEligibility;
+    }
   | { status: "unsupported"; reason: string };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -213,22 +246,40 @@ export function parseTierConfig(jsonValue: unknown): TierConfig {
     };
   }
 
+  // Absent means the config predates customer rules, so: everyone.
+  const rawEligibility = jsonValue.customerEligibility;
+  const customerEligibility =
+    rawEligibility === undefined || rawEligibility === null
+      ? "all"
+      : rawEligibility;
+
+  if (!isCustomerEligibility(customerEligibility)) {
+    return {
+      status: "unsupported",
+      reason:
+        "The saved customer eligibility is not a value this version of the app can read.",
+    };
+  }
+
   return {
     status: "ok",
     version,
     tiers: sortTiers(normalized),
     appliesTo,
+    customerEligibility,
   };
 }
 
 export function serializeTierConfig(
   tiers: Tier[],
   appliesTo: AppliesTo,
+  customerEligibility: CustomerEligibility,
 ): string {
   return JSON.stringify({
     version: TIER_CONFIG_VERSION,
     tiers: sortTiers(tiers),
     appliesTo,
+    customerEligibility,
   });
 }
 
