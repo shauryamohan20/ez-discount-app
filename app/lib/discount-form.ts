@@ -4,7 +4,9 @@ import { MAX_TIERS, sortTiers, type Tier } from "./tiers";
 /** Form state is kept as strings so half typed numbers stay on screen. */
 export type TierRowValues = {
   minQuantity: string;
+  maxQuantity: string;
   percentage: string;
+  maxDiscountedUnits: string;
 };
 
 export type DiscountFormValues = {
@@ -17,7 +19,9 @@ export type DiscountFormValues = {
 
 export type TierRowErrors = {
   minQuantity?: string;
+  maxQuantity?: string;
   percentage?: string;
+  maxDiscountedUnits?: string;
 };
 
 export type DiscountFormErrors = {
@@ -43,7 +47,22 @@ export type ValidationResult =
 export const MAX_TITLE_LENGTH = 255;
 
 export function emptyTierRow(): TierRowValues {
-  return { minQuantity: "", percentage: "" };
+  return {
+    minQuantity: "",
+    maxQuantity: "",
+    percentage: "",
+    maxDiscountedUnits: "",
+  };
+}
+
+export function tierToRow(tier: Tier): TierRowValues {
+  return {
+    minQuantity: String(tier.minQuantity),
+    maxQuantity: tier.maxQuantity === null ? "" : String(tier.maxQuantity),
+    percentage: String(tier.percentage),
+    maxDiscountedUnits:
+      tier.maxDiscountedUnits === null ? "" : String(tier.maxDiscountedUnits),
+  };
 }
 
 export function blankDiscountForm(startDate: string): DiscountFormValues {
@@ -52,7 +71,14 @@ export function blankDiscountForm(startDate: string): DiscountFormValues {
     startDate,
     endDate: "",
     combinesWithShipping: true,
-    tiers: [{ minQuantity: "2", percentage: "10" }],
+    tiers: [
+      {
+        minQuantity: "2",
+        maxQuantity: "",
+        percentage: "10",
+        maxDiscountedUnits: "",
+      },
+    ],
   };
 }
 
@@ -62,7 +88,11 @@ export function hasErrors(errors: DiscountFormErrors): boolean {
   }
 
   return Object.values(errors.rows ?? {}).some(
-    (row) => row.minQuantity || row.percentage,
+    (row) =>
+      row.minQuantity ||
+      row.maxQuantity ||
+      row.percentage ||
+      row.maxDiscountedUnits,
   );
 }
 
@@ -74,6 +104,8 @@ function parseNumber(raw: string): number | null {
 
   return Number.isFinite(value) ? value : null;
 }
+
+type ParsedRow = { index: number; tier: Tier };
 
 export function validateDiscountForm(
   values: DiscountFormValues,
@@ -108,8 +140,7 @@ export function validateDiscountForm(
     errors.tiers = `Use no more than ${MAX_TIERS} tiers.`;
   }
 
-  const tiers: Tier[] = [];
-  const seenQuantities = new Set<number>();
+  const parsed: ParsedRow[] = [];
 
   values.tiers.forEach((row, index) => {
     const rowErrors: TierRowErrors = {};
@@ -121,10 +152,21 @@ export function validateDiscountForm(
       rowErrors.minQuantity = "Use a whole number.";
     } else if (minQuantity < 1) {
       rowErrors.minQuantity = "Use 1 or more.";
-    } else if (seenQuantities.has(minQuantity)) {
-      rowErrors.minQuantity = "Each tier needs a different quantity.";
-    } else {
-      seenQuantities.add(minQuantity);
+    }
+
+    const maxQuantity = parseNumber(row.maxQuantity);
+    if (row.maxQuantity.trim() !== "") {
+      if (maxQuantity === null || !Number.isInteger(maxQuantity)) {
+        rowErrors.maxQuantity = "Use a whole number.";
+      } else if (maxQuantity < 1) {
+        rowErrors.maxQuantity = "Use 1 or more.";
+      } else if (
+        minQuantity !== null &&
+        !rowErrors.minQuantity &&
+        maxQuantity < minQuantity
+      ) {
+        rowErrors.maxQuantity = "Cannot be lower than the from quantity.";
+      }
     }
 
     const percentage = parseNumber(row.percentage);
@@ -136,13 +178,60 @@ export function validateDiscountForm(
       rowErrors.percentage = "Use 100 or less.";
     }
 
-    if (rowErrors.minQuantity || rowErrors.percentage) {
+    const maxDiscountedUnits = parseNumber(row.maxDiscountedUnits);
+    if (row.maxDiscountedUnits.trim() !== "") {
+      if (maxDiscountedUnits === null || !Number.isInteger(maxDiscountedUnits)) {
+        rowErrors.maxDiscountedUnits = "Use a whole number.";
+      } else if (maxDiscountedUnits < 1) {
+        rowErrors.maxDiscountedUnits = "Use 1 or more.";
+      }
+    }
+
+    if (
+      rowErrors.minQuantity ||
+      rowErrors.maxQuantity ||
+      rowErrors.percentage ||
+      rowErrors.maxDiscountedUnits
+    ) {
       rows[String(index)] = rowErrors;
       return;
     }
 
-    tiers.push({ minQuantity: minQuantity!, percentage: percentage! });
+    parsed.push({
+      index,
+      tier: {
+        minQuantity: minQuantity!,
+        maxQuantity: row.maxQuantity.trim() === "" ? null : maxQuantity!,
+        percentage: percentage!,
+        maxDiscountedUnits:
+          row.maxDiscountedUnits.trim() === "" ? null : maxDiscountedUnits!,
+      },
+    });
   });
+
+  // Two tiers that cover the same quantity would make the result depend on
+  // the order of the list, so overlaps are rejected rather than resolved.
+  const ordered = [...parsed].sort(
+    (a, b) => a.tier.minQuantity - b.tier.minQuantity,
+  );
+
+  for (let position = 1; position < ordered.length; position++) {
+    const previous = ordered[position - 1];
+    const current = ordered[position];
+    const previousMax = previous.tier.maxQuantity;
+
+    if (previousMax === null || current.tier.minQuantity <= previousMax) {
+      const existing = rows[String(current.index)] ?? {};
+
+      rows[String(current.index)] = {
+        ...existing,
+        minQuantity:
+          previousMax === null
+            ? `Overlaps the tier starting at ${previous.tier.minQuantity}, which has no upper limit.`
+            : `Overlaps the tier covering ${previous.tier.minQuantity} to ${previousMax}.`,
+      };
+    }
+  }
 
   if (Object.keys(rows).length > 0) {
     errors.rows = rows;
@@ -159,7 +248,7 @@ export function validateDiscountForm(
       startDate,
       endDate: endDate || null,
       combinesWithShipping: values.combinesWithShipping,
-      tiers: sortTiers(tiers),
+      tiers: sortTiers(parsed.map((row) => row.tier)),
     },
   };
 }
@@ -176,7 +265,9 @@ export function discountFormValuesFromFormData(
     if (Array.isArray(parsed)) {
       tiers = parsed.map((row) => ({
         minQuantity: String(row?.minQuantity ?? ""),
+        maxQuantity: String(row?.maxQuantity ?? ""),
         percentage: String(row?.percentage ?? ""),
+        maxDiscountedUnits: String(row?.maxDiscountedUnits ?? ""),
       }));
     }
   } catch {

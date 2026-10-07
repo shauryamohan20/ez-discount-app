@@ -7,16 +7,22 @@
         "lines": [
           {
             "id": "gid://shopify/CartLine/0",
-            "cost": {
-              "subtotalAmount": {
-                "amount": "100.0"
+            "quantity": 3,
+            "merchandise": {
+              "__typename": "ProductVariant",
+              "id": "gid://shopify/ProductVariant/100",
+              "product": {
+                "id": "gid://shopify/Product/200"
               }
             }
           }
         ]
       },
       "discount": {
-        "discountClasses": []
+        "discountClasses": [
+          "PRODUCT"
+        ],
+        "metafield": null
       }
     },
     "output": {

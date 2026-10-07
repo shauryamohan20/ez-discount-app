@@ -96,8 +96,9 @@ export function TieredDiscountForm({
       <s-section heading="Tiers">
         <s-stack direction="block" gap="base">
           <s-paragraph>
-            The discount uses the highest tier the cart qualifies for, counting
-            every item in the cart.
+            Each tier covers a range of cart quantities. Leave the to quantity
+            empty for no upper limit, or set it to the same number as the from
+            quantity to match an exact quantity. Ranges cannot overlap.
           </s-paragraph>
 
           {errors.tiers && (
@@ -110,52 +111,103 @@ export function TieredDiscountForm({
             const tierErrors = rowErrors[String(index)] ?? {};
 
             return (
-              <s-stack
+              <s-box
                 key={index}
-                direction="inline"
-                gap="base"
-                alignItems="end"
+                padding="base"
+                borderWidth="base"
+                borderRadius="base"
               >
-                <s-number-field
-                  label="Minimum quantity"
-                  value={tier.minQuantity}
-                  min={1}
-                  step={1}
-                  inputMode="numeric"
-                  {...(tierErrors.minQuantity
-                    ? { error: tierErrors.minQuantity }
-                    : {})}
-                  {...(disabled ? { disabled: true } : {})}
-                  onInput={(event) =>
-                    updateTier(index, { minQuantity: event.currentTarget.value })
-                  }
-                />
-                <s-number-field
-                  label="Percentage off"
-                  value={tier.percentage}
-                  min={0}
-                  max={100}
-                  suffix="%"
-                  {...(tierErrors.percentage
-                    ? { error: tierErrors.percentage }
-                    : {})}
-                  {...(disabled ? { disabled: true } : {})}
-                  onInput={(event) =>
-                    updateTier(index, { percentage: event.currentTarget.value })
-                  }
-                />
-                <s-button
-                  variant="tertiary"
-                  tone="critical"
-                  accessibilityLabel={`Remove tier ${index + 1}`}
-                  {...(disabled || values.tiers.length === 1
-                    ? { disabled: true }
-                    : {})}
-                  onClick={() => removeTier(index)}
-                >
-                  Remove
-                </s-button>
-              </s-stack>
+                <s-stack direction="block" gap="base">
+                  <s-stack direction="inline" gap="base" alignItems="start">
+                    <s-number-field
+                      label="From quantity"
+                      value={tier.minQuantity}
+                      min={1}
+                      step={1}
+                      inputMode="numeric"
+                      {...(tierErrors.minQuantity
+                        ? { error: tierErrors.minQuantity }
+                        : {})}
+                      {...(disabled ? { disabled: true } : {})}
+                      onInput={(event) =>
+                        updateTier(index, {
+                          minQuantity: event.currentTarget.value,
+                        })
+                      }
+                    />
+                    <s-number-field
+                      label="To quantity"
+                      value={tier.maxQuantity}
+                      min={1}
+                      step={1}
+                      inputMode="numeric"
+                      details="Empty means no limit"
+                      {...(tierErrors.maxQuantity
+                        ? { error: tierErrors.maxQuantity }
+                        : {})}
+                      {...(disabled ? { disabled: true } : {})}
+                      onInput={(event) =>
+                        updateTier(index, {
+                          maxQuantity: event.currentTarget.value,
+                        })
+                      }
+                    />
+                    <s-number-field
+                      label="Percentage off"
+                      value={tier.percentage}
+                      min={0}
+                      max={100}
+                      suffix="%"
+                      {...(tierErrors.percentage
+                        ? { error: tierErrors.percentage }
+                        : {})}
+                      {...(disabled ? { disabled: true } : {})}
+                      onInput={(event) =>
+                        updateTier(index, {
+                          percentage: event.currentTarget.value,
+                        })
+                      }
+                    />
+                  </s-stack>
+
+                  <s-stack
+                    direction="inline"
+                    gap="base"
+                    alignItems="start"
+                    justifyContent="space-between"
+                  >
+                    <s-number-field
+                      label="Discount only this many units"
+                      value={tier.maxDiscountedUnits}
+                      min={1}
+                      step={1}
+                      inputMode="numeric"
+                      details="Empty discounts every item in the cart"
+                      {...(tierErrors.maxDiscountedUnits
+                        ? { error: tierErrors.maxDiscountedUnits }
+                        : {})}
+                      {...(disabled ? { disabled: true } : {})}
+                      onInput={(event) =>
+                        updateTier(index, {
+                          maxDiscountedUnits: event.currentTarget.value,
+                        })
+                      }
+                    />
+
+                    <s-button
+                      variant="tertiary"
+                      tone="critical"
+                      accessibilityLabel={`Remove tier ${index + 1}`}
+                      {...(disabled || values.tiers.length === 1
+                        ? { disabled: true }
+                        : {})}
+                      onClick={() => removeTier(index)}
+                    >
+                      Remove
+                    </s-button>
+                  </s-stack>
+                </s-stack>
+              </s-box>
             );
           })}
 

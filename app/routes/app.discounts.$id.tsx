@@ -20,6 +20,7 @@ import {
   emptyTierRow,
   hasErrors,
   mapUserErrors,
+  tierToRow,
   validateDiscountForm,
   type DiscountFormErrors,
   type DiscountFormValues,
@@ -63,12 +64,7 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
     endDate: shopIsoToCalendarDate(discount.endsAt, offsetMinutes),
     combinesWithShipping: discount.combinesWithShipping,
     tiers:
-      config.status === "ok"
-        ? config.tiers.map((tier) => ({
-            minQuantity: String(tier.minQuantity),
-            percentage: String(tier.percentage),
-          }))
-        : [emptyTierRow()],
+      config.status === "ok" ? config.tiers.map(tierToRow) : [emptyTierRow()],
   };
 
   return {
