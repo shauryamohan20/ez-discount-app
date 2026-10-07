@@ -1,6 +1,8 @@
+import { useEffect } from "react";
 import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
-import { useLoaderData, useRouteError } from "react-router";
+import { useLoaderData, useRouteError, useSearchParams } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
+import { useAppBridge } from "@shopify/app-bridge-react";
 
 import { authenticate } from "../shopify.server";
 import {
@@ -52,6 +54,17 @@ function discountIdSuffix(id: string) {
 
 export default function DiscountsPage() {
   const { discounts, offsetMinutes, error } = useLoaderData<typeof loader>();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const shopify = useAppBridge();
+
+  const created = searchParams.get("created");
+
+  useEffect(() => {
+    if (!created) return;
+
+    shopify.toast.show("Discount created");
+    setSearchParams({}, { replace: true });
+  }, [created, setSearchParams, shopify]);
 
   return (
     <s-page heading="Tiered discounts">

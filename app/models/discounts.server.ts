@@ -1,6 +1,15 @@
 import type { AdminApiContext } from "@shopify/shopify-app-react-router/server";
 
-import { parseTierConfig, type TierConfig } from "../lib/tiers";
+import {
+  DISCOUNT_FUNCTION_HANDLE,
+  TIER_METAFIELD_KEY,
+  TIER_METAFIELD_NAMESPACE,
+  TIER_METAFIELD_TYPE,
+  parseTierConfig,
+  serializeTierConfig,
+  type Tier,
+  type TierConfig,
+} from "../lib/tiers";
 
 export type DiscountStatus = "ACTIVE" | "EXPIRED" | "SCHEDULED";
 
@@ -197,4 +206,92 @@ export async function getTieredDiscount(
   if (!data.discountNode) return null;
 
   return toTieredDiscount(data.discountNode);
+}
+
+export type TieredDiscountInput = {
+  title: string;
+  /** ISO 8601 instant, already resolved against the shop's time zone. */
+  startsAt: string;
+  endsAt: string | null;
+  combinesWithShipping: boolean;
+  tiers: Tier[];
+};
+
+export type DiscountUserError = {
+  field?: string[] | null;
+  message: string;
+};
+
+export type MutationResult =
+  | { ok: true; id: string }
+  | { ok: false; userErrors: DiscountUserError[] };
+
+const CREATE_DISCOUNT_MUTATION = `#graphql
+  mutation CreateTieredDiscount($discount: DiscountAutomaticAppInput!) {
+    discountAutomaticAppCreate(automaticAppDiscount: $discount) {
+      automaticAppDiscount {
+        discountId
+      }
+      userErrors {
+        field
+        message
+      }
+    }
+  }
+`;
+
+/**
+ * The Function is referenced by handle, not by ID. Handles are stable across
+ * stores and environments, and functionId is deprecated as of 2025-10.
+ */
+function toDiscountInput(input: TieredDiscountInput) {
+  return {
+    title: input.title,
+    startsAt: input.startsAt,
+    endsAt: input.endsAt,
+    discountClasses: ["PRODUCT"],
+    combinesWith: {
+      orderDiscounts: false,
+      productDiscounts: false,
+      shippingDiscounts: input.combinesWithShipping,
+    },
+    metafields: [
+      {
+        namespace: TIER_METAFIELD_NAMESPACE,
+        key: TIER_METAFIELD_KEY,
+        type: TIER_METAFIELD_TYPE,
+        value: serializeTierConfig(input.tiers),
+      },
+    ],
+  };
+}
+
+export async function createTieredDiscount(
+  admin: AdminApiContext,
+  input: TieredDiscountInput,
+): Promise<MutationResult> {
+  const data = await adminRequest<{
+    discountAutomaticAppCreate: {
+      automaticAppDiscount: { discountId: string } | null;
+      userErrors: DiscountUserError[];
+    };
+  }>(admin, CREATE_DISCOUNT_MUTATION, {
+    discount: {
+      ...toDiscountInput(input),
+      functionHandle: DISCOUNT_FUNCTION_HANDLE,
+    },
+  });
+
+  const payload = data.discountAutomaticAppCreate;
+
+  if (payload.userErrors.length > 0 || !payload.automaticAppDiscount) {
+    return {
+      ok: false,
+      userErrors: payload.userErrors.length
+        ? payload.userErrors
+        : [{ message: "Shopify did not return the created discount." }],
+    };
+  }
+
+  return { ok: true, id: payload.automaticAppDiscount.discountId };
 }
