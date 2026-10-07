@@ -10,29 +10,74 @@ import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 import { TieredDiscountForm } from "../components/TieredDiscountForm";
 import {
-  blankDiscountForm,
   discountFormValuesFromFormData,
+  emptyTierRow,
   hasErrors,
   mapUserErrors,
   validateDiscountForm,
   type DiscountFormErrors,
   type DiscountFormValues,
 } from "../lib/discount-form";
-import { calendarDateToShopIso, todayInShop } from "../lib/shop-time";
 import {
-  createTieredDiscount,
+  calendarDateToShopIso,
+  shopIsoToCalendarDate,
+  todayInShop,
+} from "../lib/shop-time";
+import {
   getShopTimezoneOffsetMinutes,
+  getTieredDiscount,
+  toDiscountGid,
+  updateTieredDiscount,
 } from "../models/discounts.server";
 
-export const loader = async ({ request }: LoaderFunctionArgs) => {
+export const loader = async ({ request, params }: LoaderFunctionArgs) => {
   const { admin } = await authenticate.admin(request);
-  const offsetMinutes = await getShopTimezoneOffsetMinutes(admin);
 
-  return { today: todayInShop(offsetMinutes) };
+  const id = toDiscountGid(params.id);
+  if (!id) {
+    throw new Response("Not found", { status: 404 });
+  }
+
+  const [offsetMinutes, discount] = await Promise.all([
+    getShopTimezoneOffsetMinutes(admin),
+    getTieredDiscount(admin, id),
+  ]);
+
+  if (!discount) {
+    throw new Response("Not found", { status: 404 });
+  }
+
+  const config = discount.config;
+
+  const values: DiscountFormValues = {
+    title: discount.title,
+    startDate:
+      shopIsoToCalendarDate(discount.startsAt, offsetMinutes) ||
+      todayInShop(offsetMinutes),
+    endDate: shopIsoToCalendarDate(discount.endsAt, offsetMinutes),
+    combinesWithShipping: discount.combinesWithShipping,
+    tiers:
+      config.status === "ok"
+        ? config.tiers.map((tier) => ({
+            minQuantity: String(tier.minQuantity),
+            percentage: String(tier.percentage),
+          }))
+        : [emptyTierRow()],
+  };
+
+  return {
+    values,
+    unsupportedReason: config.status === "ok" ? null : config.reason,
+  };
 };
 
-export const action = async ({ request }: ActionFunctionArgs) => {
+export const action = async ({ request, params }: ActionFunctionArgs) => {
   const { admin } = await authenticate.admin(request);
+
+  const id = toDiscountGid(params.id);
+  if (!id) {
+    throw new Response("Not found", { status: 404 });
+  }
 
   const formData = await request.formData();
   const values = discountFormValuesFromFormData(formData);
@@ -47,7 +92,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     const { title, startDate, endDate, combinesWithShipping, tiers } =
       validation.value;
 
-    const result = await createTieredDiscount(admin, {
+    const result = await updateTieredDiscount(admin, id, {
       title,
       startsAt: calendarDateToShopIso(startDate, offsetMinutes),
       endsAt: endDate
@@ -66,7 +111,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       };
     }
 
-    return redirect("/app/discounts?toast=created");
+    return redirect("/app/discounts?toast=updated");
   } catch (error) {
     return {
       errors: {} as DiscountFormErrors,
@@ -78,13 +123,12 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   }
 };
 
-export default function NewDiscountPage() {
-  const { today } = useLoaderData<typeof loader>();
+export default function EditDiscountPage() {
+  const { values: loadedValues, unsupportedReason } =
+    useLoaderData<typeof loader>();
   const fetcher = useFetcher<typeof action>();
 
-  const [values, setValues] = useState<DiscountFormValues>(() =>
-    blankDiscountForm(today),
-  );
+  const [values, setValues] = useState<DiscountFormValues>(loadedValues);
   const [clientErrors, setClientErrors] = useState<DiscountFormErrors>({});
 
   const saving = fetcher.state !== "idle";
@@ -115,7 +159,7 @@ export default function NewDiscountPage() {
   };
 
   return (
-    <s-page heading="Create tiered discount">
+    <s-page heading="Edit tiered discount">
       <s-link slot="breadcrumb-actions" href="/app/discounts">
         Discounts
       </s-link>
@@ -132,6 +176,19 @@ export default function NewDiscountPage() {
       <s-button slot="secondary-actions" href="/app/discounts">
         Cancel
       </s-button>
+
+      {unsupportedReason && (
+        <s-banner
+          slot="supplemental-start"
+          tone="warning"
+          heading="These settings were not written by this version of the app"
+        >
+          <s-paragraph>
+            {unsupportedReason} Saving replaces the settings on this discount with the
+            tiers below.
+          </s-paragraph>
+        </s-banner>
+      )}
 
       {formError && (
         <s-banner

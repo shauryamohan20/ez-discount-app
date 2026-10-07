@@ -8,6 +8,7 @@ import { authenticate } from "../shopify.server";
 import {
   getShopTimezoneOffsetMinutes,
   listTieredDiscounts,
+  toDiscountNumericId,
   type DiscountStatus,
   type TieredDiscount,
 } from "../models/discounts.server";
@@ -24,6 +25,11 @@ const STATUS_TONES: Record<DiscountStatus, "success" | "info" | "neutral"> = {
   ACTIVE: "success",
   SCHEDULED: "info",
   EXPIRED: "neutral",
+};
+
+const TOAST_MESSAGES: Record<string, string> = {
+  created: "Discount created",
+  updated: "Discount updated",
 };
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
@@ -48,23 +54,21 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   }
 };
 
-function discountIdSuffix(id: string) {
-  return id.split("/").pop() ?? id;
-}
-
 export default function DiscountsPage() {
   const { discounts, offsetMinutes, error } = useLoaderData<typeof loader>();
   const [searchParams, setSearchParams] = useSearchParams();
   const shopify = useAppBridge();
 
-  const created = searchParams.get("created");
+  const toast = searchParams.get("toast");
 
   useEffect(() => {
-    if (!created) return;
+    if (!toast) return;
 
-    shopify.toast.show("Discount created");
+    const message = TOAST_MESSAGES[toast];
+    if (message) shopify.toast.show(message);
+
     setSearchParams({}, { replace: true });
-  }, [created, setSearchParams, shopify]);
+  }, [toast, setSearchParams, shopify]);
 
   return (
     <s-page heading="Tiered discounts">
@@ -105,7 +109,8 @@ export default function DiscountsPage() {
 
             <s-table-body>
               {discounts.map((discount) => {
-                const linkId = `discount-${discountIdSuffix(discount.id)}`;
+                const numericId = toDiscountNumericId(discount.id);
+                const linkId = `discount-${numericId}`;
                 const editable = discount.config.status === "ok";
 
                 return (
@@ -117,7 +122,7 @@ export default function DiscountsPage() {
                       {editable ? (
                         <s-link
                           id={linkId}
-                          href={`/app/discounts/${encodeURIComponent(discount.id)}`}
+                          href={`/app/discounts/${numericId}`}
                         >
                           {discount.title}
                         </s-link>

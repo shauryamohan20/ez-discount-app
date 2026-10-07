@@ -295,3 +295,62 @@ export async function createTieredDiscount(
 
   return { ok: true, id: payload.automaticAppDiscount.discountId };
 }
+
+const UPDATE_DISCOUNT_MUTATION = `#graphql
+  mutation UpdateTieredDiscount($id: ID!, $discount: DiscountAutomaticAppInput!) {
+    discountAutomaticAppUpdate(id: $id, automaticAppDiscount: $discount) {
+      automaticAppDiscount {
+        discountId
+      }
+      userErrors {
+        field
+        message
+      }
+    }
+  }
+`;
+
+export async function updateTieredDiscount(
+  admin: AdminApiContext,
+  id: string,
+  input: TieredDiscountInput,
+): Promise<MutationResult> {
+  const data = await adminRequest<{
+    discountAutomaticAppUpdate: {
+      automaticAppDiscount: { discountId: string } | null;
+      userErrors: DiscountUserError[];
+    };
+  }>(admin, UPDATE_DISCOUNT_MUTATION, {
+    id,
+    // The metafield is identified by namespace and key, so the same block
+    // works whether it already exists or not.
+    discount: toDiscountInput(input),
+  });
+
+  const payload = data.discountAutomaticAppUpdate;
+
+  if (payload.userErrors.length > 0 || !payload.automaticAppDiscount) {
+    return {
+      ok: false,
+      userErrors: payload.userErrors.length
+        ? payload.userErrors
+        : [{ message: "Shopify did not return the updated discount." }],
+    };
+  }
+
+  return { ok: true, id: payload.automaticAppDiscount.discountId };
+}
+
+const DISCOUNT_GID_PREFIX = "gid://shopify/DiscountAutomaticNode/";
+
+/** The trailing number of a discount gid, used in app URLs. */
+export function toDiscountNumericId(gid: string): string {
+  return gid.split("/").pop() ?? gid;
+}
+
+/** Rebuilds a gid from a URL parameter, or null when it is not a number. */
+export function toDiscountGid(numericId: string | undefined): string | null {
+  if (!numericId || !/^\d+$/.test(numericId)) return null;
+
+  return `${DISCOUNT_GID_PREFIX}${numericId}`;
+}
