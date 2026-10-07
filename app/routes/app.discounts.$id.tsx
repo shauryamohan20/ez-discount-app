@@ -31,10 +31,12 @@ import {
   todayInShop,
 } from "../lib/shop-time";
 import {
+  getResourceTitles,
   getShopTimezoneOffsetMinutes,
   getTieredDiscount,
   updateTieredDiscount,
 } from "../models/discounts.server";
+import { ALL_PRODUCTS } from "../lib/tiers";
 import { toDiscountGid } from "../lib/discount-id";
 
 export const loader = async ({ request, params }: LoaderFunctionArgs) => {
@@ -55,6 +57,20 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
   }
 
   const config = discount.config;
+  const appliesTo = config.status === "ok" ? config.appliesTo : ALL_PRODUCTS;
+
+  const resourceIds =
+    appliesTo.type === "products"
+      ? appliesTo.productIds
+      : appliesTo.type === "collections"
+        ? appliesTo.collectionIds
+        : [];
+
+  const titles = await getResourceTitles(admin, resourceIds);
+  const resources = resourceIds.map((id) => ({
+    id,
+    title: titles.get(id) ?? "No longer available",
+  }));
 
   const values: DiscountFormValues = {
     title: discount.title,
@@ -63,6 +79,9 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
       todayInShop(offsetMinutes),
     endDate: shopIsoToCalendarDate(discount.endsAt, offsetMinutes),
     combinesWithShipping: discount.combinesWithShipping,
+    appliesToType: appliesTo.type,
+    products: appliesTo.type === "products" ? resources : [],
+    collections: appliesTo.type === "collections" ? resources : [],
     tiers:
       config.status === "ok" ? config.tiers.map(tierToRow) : [emptyTierRow()],
   };
@@ -91,7 +110,7 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
 
   try {
     const offsetMinutes = await getShopTimezoneOffsetMinutes(admin);
-    const { title, startDate, endDate, combinesWithShipping, tiers } =
+    const { title, startDate, endDate, combinesWithShipping, appliesTo, tiers } =
       validation.value;
 
     const result = await updateTieredDiscount(admin, id, {
@@ -101,6 +120,7 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
         ? calendarDateToShopIso(endDate, offsetMinutes, true)
         : null,
       combinesWithShipping,
+      appliesTo,
       tiers,
     });
 
@@ -154,6 +174,9 @@ export default function EditDiscountPage() {
         startDate: values.startDate,
         endDate: values.endDate,
         combinesWithShipping: String(values.combinesWithShipping),
+        appliesToType: values.appliesToType,
+        products: JSON.stringify(values.products),
+        collections: JSON.stringify(values.collections),
         tiers: JSON.stringify(values.tiers),
       },
       { method: "POST" },

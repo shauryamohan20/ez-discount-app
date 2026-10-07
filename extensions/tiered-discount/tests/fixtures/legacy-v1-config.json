@@ -12,7 +12,8 @@
               "__typename": "ProductVariant",
               "id": "gid://shopify/ProductVariant/100",
               "product": {
-                "id": "gid://shopify/Product/200"
+                "id": "gid://shopify/Product/200",
+                "inSelectedCollection": false
               }
             }
           }

@@ -12,7 +12,7 @@
         ],
         "metafield": {
           "jsonValue": {
-            "version": 2,
+            "version": 3,
             "tiers": [
               {
                 "minQuantity": 2,
@@ -26,7 +26,12 @@
                 "percentage": 20,
                 "maxDiscountedUnits": null
               }
-            ]
+            ],
+            "appliesTo": {
+              "type": "all",
+              "productIds": [],
+              "collectionIds": []
+            }
           }
         }
       }

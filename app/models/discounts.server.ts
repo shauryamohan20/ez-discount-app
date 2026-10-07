@@ -2,11 +2,14 @@ import type { AdminApiContext } from "@shopify/shopify-app-react-router/server";
 
 import {
   DISCOUNT_FUNCTION_HANDLE,
+  INPUT_VARIABLES_METAFIELD_KEY,
   TIER_METAFIELD_KEY,
   TIER_METAFIELD_NAMESPACE,
   TIER_METAFIELD_TYPE,
   parseTierConfig,
+  serializeInputVariables,
   serializeTierConfig,
+  type AppliesTo,
   type Tier,
   type TierConfig,
 } from "../lib/tiers";
@@ -214,6 +217,7 @@ export type TieredDiscountInput = {
   startsAt: string;
   endsAt: string | null;
   combinesWithShipping: boolean;
+  appliesTo: AppliesTo;
   tiers: Tier[];
 };
 
@@ -260,7 +264,13 @@ function toDiscountInput(input: TieredDiscountInput) {
         namespace: TIER_METAFIELD_NAMESPACE,
         key: TIER_METAFIELD_KEY,
         type: TIER_METAFIELD_TYPE,
-        value: serializeTierConfig(input.tiers),
+        value: serializeTierConfig(input.tiers, input.appliesTo),
+      },
+      {
+        namespace: TIER_METAFIELD_NAMESPACE,
+        key: INPUT_VARIABLES_METAFIELD_KEY,
+        type: TIER_METAFIELD_TYPE,
+        value: serializeInputVariables(input.appliesTo),
       },
     ],
   };
@@ -447,4 +457,43 @@ export async function deleteTieredDiscount(
   }
 
   return { ok: true, id: payload.deletedAutomaticDiscountId };
+}
+
+const RESOURCE_TITLES_QUERY = `#graphql
+  query DiscountResourceTitles($ids: [ID!]!) {
+    nodes(ids: $ids) {
+      __typename
+      ... on Product {
+        id
+        title
+      }
+      ... on Collection {
+        id
+        title
+      }
+    }
+  }
+`;
+
+/**
+ * Titles for the products and collections a discount targets. The config only
+ * stores IDs, so titles are resolved on load and a renamed product shows its
+ * current name. A deleted one comes back as null and is reported as missing.
+ */
+export async function getResourceTitles(
+  admin: AdminApiContext,
+  ids: string[],
+): Promise<Map<string, string>> {
+  const titles = new Map<string, string>();
+  if (ids.length === 0) return titles;
+
+  const data = await adminRequest<{
+    nodes: ({ id: string; title: string } | null)[];
+  }>(admin, RESOURCE_TITLES_QUERY, { ids });
+
+  for (const node of data.nodes) {
+    if (node?.id) titles.set(node.id, node.title);
+  }
+
+  return titles;
 }

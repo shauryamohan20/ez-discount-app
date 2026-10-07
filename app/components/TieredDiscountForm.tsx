@@ -1,11 +1,14 @@
+import { useAppBridge } from "@shopify/app-bridge-react";
+
 import {
   MAX_TITLE_LENGTH,
   emptyTierRow,
   type DiscountFormErrors,
   type DiscountFormValues,
+  type ResourceRef,
   type TierRowValues,
 } from "../lib/discount-form";
-import { MAX_TIERS } from "../lib/tiers";
+import { MAX_TIERS, type AppliesToType } from "../lib/tiers";
 
 type Props = {
   values: DiscountFormValues;
@@ -20,8 +23,48 @@ export function TieredDiscountForm({
   disabled = false,
   onChange,
 }: Props) {
+  const shopify = useAppBridge();
+
   const update = (patch: Partial<DiscountFormValues>) => {
     onChange({ ...values, ...patch });
+  };
+
+  const selected =
+    values.appliesToType === "collections" ? values.collections : values.products;
+
+  const pickResources = async () => {
+    const isCollections = values.appliesToType === "collections";
+
+    const picked = await shopify.resourcePicker({
+      type: isCollections ? "collection" : "product",
+      multiple: true,
+      action: "select",
+      selectionIds: selected.map((resource) => ({ id: resource.id })),
+    });
+
+    // The picker returns undefined when the merchant cancels, which is not the
+    // same as clearing the selection.
+    if (!picked) return;
+
+    const refs: ResourceRef[] = picked.map((resource) => ({
+      id: String(resource.id),
+      title: String(resource.title ?? ""),
+    }));
+
+    update(isCollections ? { collections: refs } : { products: refs });
+  };
+
+  const removeResource = (id: string) => {
+    if (values.appliesToType === "collections") {
+      update({
+        collections: values.collections.filter(
+          (collection) => collection.id !== id,
+        ),
+      });
+      return;
+    }
+
+    update({ products: values.products.filter((product) => product.id !== id) });
   };
 
   const updateTier = (index: number, patch: Partial<TierRowValues>) => {
@@ -93,10 +136,93 @@ export function TieredDiscountForm({
         </s-stack>
       </s-section>
 
+      <s-section heading="Applies to">
+        <s-stack direction="block" gap="base">
+          <s-choice-list
+            name="appliesToType"
+            label="Which products this discount applies to"
+            labelAccessibilityVisibility="exclusive"
+            values={[values.appliesToType]}
+            {...(errors.appliesTo ? { error: errors.appliesTo } : {})}
+            {...(disabled ? { disabled: true } : {})}
+            onChange={(event) => {
+              const list = event.currentTarget as HTMLElementTagNameMap["s-choice-list"];
+              const next = list.values[0] as AppliesToType | undefined;
+
+              if (next) update({ appliesToType: next });
+            }}
+          >
+            <s-choice value="all">
+              All products
+              <s-text slot="details">Every item in the cart counts.</s-text>
+            </s-choice>
+            <s-choice value="products">
+              Specific products
+              <s-text slot="details">
+                Only the products you choose count toward the quantity.
+              </s-text>
+            </s-choice>
+            <s-choice value="collections">
+              Specific collections
+              <s-text slot="details">
+                Only products in the collections you choose count toward the
+                quantity.
+              </s-text>
+            </s-choice>
+          </s-choice-list>
+
+          {values.appliesToType !== "all" && (
+            <s-stack direction="block" gap="small-100">
+              <s-stack direction="inline">
+                <s-button
+                  variant="secondary"
+                  {...(disabled ? { disabled: true } : {})}
+                  onClick={pickResources}
+                >
+                  {selected.length > 0 ? "Edit selection" : "Browse"}
+                </s-button>
+              </s-stack>
+
+              {selected.length === 0 ? (
+                <s-text color="subdued">Nothing selected yet.</s-text>
+              ) : (
+                selected.map((resource) => (
+                  <s-box
+                    key={resource.id}
+                    padding="small-100"
+                    borderWidth="base"
+                    borderRadius="base"
+                  >
+                    <s-stack
+                      direction="inline"
+                      gap="base"
+                      alignItems="center"
+                      justifyContent="space-between"
+                    >
+                      <s-text>{resource.title || resource.id}</s-text>
+                      <s-button
+                        variant="tertiary"
+                        tone="critical"
+                        accessibilityLabel={`Remove ${resource.title}`}
+                        {...(disabled ? { disabled: true } : {})}
+                        onClick={() => removeResource(resource.id)}
+                      >
+                        Remove
+                      </s-button>
+                    </s-stack>
+                  </s-box>
+                ))
+              )}
+            </s-stack>
+          )}
+        </s-stack>
+      </s-section>
+
       <s-section heading="Tiers">
         <s-stack direction="block" gap="base">
           <s-paragraph>
-            Each tier covers a range of cart quantities. Leave the to quantity
+            Each tier covers a range of quantities, counting only the items
+            this discount applies to. Leave the to quantity
             empty for no upper limit, or set it to the same number as the from
             quantity to match an exact quantity. Ranges cannot overlap.
           </s-paragraph>

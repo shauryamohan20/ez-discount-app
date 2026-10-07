@@ -44,7 +44,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
   try {
     const offsetMinutes = await getShopTimezoneOffsetMinutes(admin);
-    const { title, startDate, endDate, combinesWithShipping, tiers } =
+    const { title, startDate, endDate, combinesWithShipping, appliesTo, tiers } =
       validation.value;
 
     const result = await createTieredDiscount(admin, {
@@ -54,6 +54,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         ? calendarDateToShopIso(endDate, offsetMinutes, true)
         : null,
       combinesWithShipping,
+      appliesTo,
       tiers,
     });
 
@@ -108,6 +109,9 @@ export default function NewDiscountPage() {
         startDate: values.startDate,
         endDate: values.endDate,
         combinesWithShipping: String(values.combinesWithShipping),
+        appliesToType: values.appliesToType,
+        products: JSON.stringify(values.products),
+        collections: JSON.stringify(values.collections),
         tiers: JSON.stringify(values.tiers),
       },
       { method: "POST" },

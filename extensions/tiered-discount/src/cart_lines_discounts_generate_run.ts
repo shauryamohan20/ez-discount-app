@@ -10,8 +10,9 @@ import {
  * Written by the app into the `$app:tiered` / `config` metafield.
  *
  * Version 1 tiers only had minQuantity and percentage and were always open
- * ended, so a missing maxQuantity or maxDiscountedUnits means "no limit" and
- * version 1 configs keep working untouched.
+ * ended. Version 2 added maxQuantity and maxDiscountedUnits. Version 3 added
+ * appliesTo. Every added field is optional here, so a config written by any
+ * earlier version of the app still behaves the way it did then.
  */
 type Tier = {
   minQuantity: number;
@@ -20,9 +21,43 @@ type Tier = {
   maxDiscountedUnits?: number | null;
 };
 
-type TierConfig = {tiers?: Tier[]};
+type AppliesTo = {
+  type?: 'all' | 'products' | 'collections';
+  productIds?: string[] | null;
+};
+
+type TierConfig = {
+  tiers?: Tier[];
+  appliesTo?: AppliesTo | null;
+};
 
 type Line = CartInput['cart']['lines'][number];
+
+/**
+ * Which cart lines this discount is allowed to touch. Collection membership is
+ * resolved by Shopify through the inSelectedCollection field, because a
+ * function cannot look collections up for itself.
+ */
+function isEligible(line: Line, appliesTo: AppliesTo | null | undefined) {
+  const merchandise = line.merchandise;
+
+  // Anything that is not a product variant, such as a custom line item, has no
+  // product to match against.
+  if (merchandise.__typename !== 'ProductVariant') {
+    return !appliesTo || !appliesTo.type || appliesTo.type === 'all';
+  }
+
+  switch (appliesTo?.type) {
+    case 'products': {
+      const ids = appliesTo.productIds;
+      return Array.isArray(ids) && ids.includes(merchandise.product.id);
+    }
+    case 'collections':
+      return merchandise.product.inSelectedCollection;
+    default:
+      return true;
+  }
+}
 
 function isApplicable(tier: Tier, quantity: number): boolean {
   if (quantity < tier.minQuantity) return false;
@@ -108,15 +143,26 @@ export function cartLinesDiscountsGenerateRun(
     return {operations: []};
   }
 
-  // Total items in the cart
-  const totalQuantity = lines.reduce((sum, line) => sum + line.quantity, 0);
+  // Only the lines this discount targets count toward the quantity, and only
+  // those lines are discounted.
+  const eligibleLines = lines.filter((line) =>
+    isEligible(line, config?.appliesTo),
+  );
+  if (!eligibleLines.length) {
+    return {operations: []};
+  }
+
+  const totalQuantity = eligibleLines.reduce(
+    (sum, line) => sum + line.quantity,
+    0,
+  );
 
   const tier = bestTier(tiers, totalQuantity);
   if (!tier) {
     return {operations: []};
   }
 
-  const targets = buildTargets(lines, tier.maxDiscountedUnits);
+  const targets = buildTargets(eligibleLines, tier.maxDiscountedUnits);
   if (!targets.length) {
     return {operations: []};
   }

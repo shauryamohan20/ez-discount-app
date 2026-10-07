@@ -7,13 +7,37 @@
         "lines": [
           {
             "id": "gid://shopify/CartLine/0",
-            "quantity": 6,
+            "quantity": 2,
             "merchandise": {
               "__typename": "ProductVariant",
               "id": "gid://shopify/ProductVariant/100",
               "product": {
                 "id": "gid://shopify/Product/200",
+                "inSelectedCollection": true
+              }
+            }
+          },
+          {
+            "id": "gid://shopify/CartLine/1",
+            "quantity": 9,
+            "merchandise": {
+              "__typename": "ProductVariant",
+              "id": "gid://shopify/ProductVariant/101",
+              "product": {
+                "id": "gid://shopify/Product/201",
                 "inSelectedCollection": false
+              }
+            }
+          },
+          {
+            "id": "gid://shopify/CartLine/2",
+            "quantity": 4,
+            "merchandise": {
+              "__typename": "ProductVariant",
+              "id": "gid://shopify/ProductVariant/102",
+              "product": {
+                "id": "gid://shopify/Product/202",
+                "inSelectedCollection": true
               }
             }
           }
@@ -31,13 +55,15 @@
                 "minQuantity": 5,
                 "maxQuantity": null,
                 "percentage": 20,
-                "maxDiscountedUnits": 2
+                "maxDiscountedUnits": 3
               }
             ],
             "appliesTo": {
-              "type": "all",
+              "type": "collections",
               "productIds": [],
-              "collectionIds": []
+              "collectionIds": [
+                "gid://shopify/Collection/1"
+              ]
             }
           }
         }
@@ -55,6 +81,12 @@
                     "cartLine": {
                       "id": "gid://shopify/CartLine/0",
                       "quantity": 2
+                    }
+                  },
+                  {
+                    "cartLine": {
+                      "id": "gid://shopify/CartLine/2",
+                      "quantity": 1
                     }
                   }
                 ],

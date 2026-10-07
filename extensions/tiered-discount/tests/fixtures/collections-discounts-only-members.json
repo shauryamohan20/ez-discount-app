@@ -7,12 +7,24 @@
         "lines": [
           {
             "id": "gid://shopify/CartLine/0",
-            "quantity": 6,
+            "quantity": 3,
             "merchandise": {
               "__typename": "ProductVariant",
               "id": "gid://shopify/ProductVariant/100",
               "product": {
                 "id": "gid://shopify/Product/200",
+                "inSelectedCollection": true
+              }
+            }
+          },
+          {
+            "id": "gid://shopify/CartLine/1",
+            "quantity": 5,
+            "merchandise": {
+              "__typename": "ProductVariant",
+              "id": "gid://shopify/ProductVariant/101",
+              "product": {
+                "id": "gid://shopify/Product/201",
                 "inSelectedCollection": false
               }
             }
@@ -28,16 +40,24 @@
             "version": 3,
             "tiers": [
               {
+                "minQuantity": 2,
+                "maxQuantity": 4,
+                "percentage": 10,
+                "maxDiscountedUnits": null
+              },
+              {
                 "minQuantity": 5,
                 "maxQuantity": null,
                 "percentage": 20,
-                "maxDiscountedUnits": 2
+                "maxDiscountedUnits": null
               }
             ],
             "appliesTo": {
-              "type": "all",
+              "type": "collections",
               "productIds": [],
-              "collectionIds": []
+              "collectionIds": [
+                "gid://shopify/Collection/1"
+              ]
             }
           }
         }
@@ -49,18 +69,17 @@
           "productDiscountsAdd": {
             "candidates": [
               {
-                "message": "20% OFF",
+                "message": "10% OFF",
                 "targets": [
                   {
                     "cartLine": {
-                      "id": "gid://shopify/CartLine/0",
-                      "quantity": 2
+                      "id": "gid://shopify/CartLine/0"
                     }
                   }
                 ],
                 "value": {
                   "percentage": {
-                    "value": "20"
+                    "value": "10"
                   }
                 }
               }

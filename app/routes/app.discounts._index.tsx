@@ -27,7 +27,7 @@ import type {
 } from "../models/discounts.server";
 import { toDiscountGid, toDiscountNumericId } from "../lib/discount-id";
 import { formatShopDate } from "../lib/shop-time";
-import { summarizeTiers } from "../lib/tiers";
+import { summarizeAppliesTo, summarizeTiers } from "../lib/tiers";
 
 const CONFIRM_MODAL_ID = "confirm-discount-action";
 
@@ -287,7 +287,12 @@ export default function DiscountsPage() {
 
                     <s-table-cell>
                       {discount.config.status === "ok" ? (
-                        <s-text>{summarizeTiers(discount.config.tiers)}</s-text>
+                        <s-stack direction="block" gap="small-500">
+                          <s-text>{summarizeTiers(discount.config.tiers)}</s-text>
+                          <s-text color="subdued">
+                            {summarizeAppliesTo(discount.config.appliesTo)}
+                          </s-text>
+                        </s-stack>
                       ) : (
                         <s-stack direction="block" gap="small-300">
                           <s-badge tone="warning">Not editable</s-badge>

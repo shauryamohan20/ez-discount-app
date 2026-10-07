@@ -15,3 +15,10 @@ description = "t:description"
   [extensions.build]
   command = ""
   path = "dist/function.wasm"
+
+  # Collection membership cannot be resolved inside the function, so the
+  # selected collection IDs are passed into the input query as variables.
+  # They come from this metafield, whose top level keys are the variable names.
+  [extensions.input.variables]
+  namespace = "$app:tiered"
+  key = "input-variables"

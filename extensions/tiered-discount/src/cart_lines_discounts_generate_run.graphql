@@ -1,4 +1,4 @@
-query CartInput {
+query CartInput($collectionIds: [ID!] = []) {
   cart {
     lines {
       id
@@ -9,6 +9,7 @@ query CartInput {
           id
           product {
             id
+            inSelectedCollection: inAnyCollection(ids: $collectionIds)
           }
         }
       }

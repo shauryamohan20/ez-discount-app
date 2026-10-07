@@ -12,7 +12,8 @@
               "__typename": "ProductVariant",
               "id": "gid://shopify/ProductVariant/100",
               "product": {
-                "id": "gid://shopify/Product/200"
+                "id": "gid://shopify/Product/200",
+                "inSelectedCollection": false
               }
             }
           },
@@ -23,7 +24,8 @@
               "__typename": "ProductVariant",
               "id": "gid://shopify/ProductVariant/101",
               "product": {
-                "id": "gid://shopify/Product/201"
+                "id": "gid://shopify/Product/201",
+                "inSelectedCollection": false
               }
             }
           }
@@ -35,7 +37,7 @@
         ],
         "metafield": {
           "jsonValue": {
-            "version": 2,
+            "version": 3,
             "tiers": [
               {
                 "minQuantity": 2,
@@ -49,7 +51,12 @@
                 "percentage": 20,
                 "maxDiscountedUnits": null
               }
-            ]
+            ],
+            "appliesTo": {
+              "type": "all",
+              "productIds": [],
+              "collectionIds": []
+            }
           }
         }
       }

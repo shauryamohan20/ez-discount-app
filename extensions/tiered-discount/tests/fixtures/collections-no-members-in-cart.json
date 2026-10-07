@@ -28,47 +28,31 @@
             "version": 3,
             "tiers": [
               {
+                "minQuantity": 2,
+                "maxQuantity": 4,
+                "percentage": 10,
+                "maxDiscountedUnits": null
+              },
+              {
                 "minQuantity": 5,
                 "maxQuantity": null,
                 "percentage": 20,
-                "maxDiscountedUnits": 2
+                "maxDiscountedUnits": null
               }
             ],
             "appliesTo": {
-              "type": "all",
+              "type": "collections",
               "productIds": [],
-              "collectionIds": []
+              "collectionIds": [
+                "gid://shopify/Collection/1"
+              ]
             }
           }
         }
       }
     },
     "output": {
-      "operations": [
-        {
-          "productDiscountsAdd": {
-            "candidates": [
-              {
-                "message": "20% OFF",
-                "targets": [
-                  {
-                    "cartLine": {
-                      "id": "gid://shopify/CartLine/0",
-                      "quantity": 2
-                    }
-                  }
-                ],
-                "value": {
-                  "percentage": {
-                    "value": "20"
-                  }
-                }
-              }
-            ],
-            "selectionStrategy": "FIRST"
-          }
-        }
-      ]
+      "operations": []
     }
   }
 }

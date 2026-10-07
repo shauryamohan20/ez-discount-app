@@ -11,6 +11,14 @@ export const TIER_METAFIELD_NAMESPACE = "$app:tiered";
 export const TIER_METAFIELD_KEY = "config";
 export const TIER_METAFIELD_TYPE = "json";
 
+/**
+ * A second metafield, read by the Function as input query variables. Its top
+ * level keys are variable names, which is why the collection IDs cannot just
+ * live in the config metafield alongside everything else. Named in
+ * extensions/tiered-discount/shopify.extension.toml.
+ */
+export const INPUT_VARIABLES_METAFIELD_KEY = "input-variables";
+
 /** Handle of the Function extension in extensions/tiered-discount. */
 export const DISCOUNT_FUNCTION_HANDLE = "tiered-discount";
 
@@ -19,13 +27,15 @@ export const DISCOUNT_FUNCTION_HANDLE = "tiered-discount";
  *
  * 1: tiers of { minQuantity, percentage }, always open ended.
  * 2: tiers gain maxQuantity and maxDiscountedUnits, both nullable.
+ * 3: adds appliesTo, which defaults to every product.
  *
- * A version 1 tier is a version 2 tier with both new fields null, so old
- * discounts keep working and are rewritten as version 2 when next saved.
+ * Each added field is optional, so a config written by an earlier version
+ * keeps the behaviour it had then and is rewritten at the current version the
+ * next time it is saved.
  * Discounts saved by a newer version are reported as unsupported rather than
  * edited with the wrong assumptions.
  */
-export const TIER_CONFIG_VERSION = 2;
+export const TIER_CONFIG_VERSION = 3;
 
 export const MAX_TIERS = 10;
 
@@ -39,8 +49,23 @@ export type Tier = {
   maxDiscountedUnits: number | null;
 };
 
+export type AppliesToType = "all" | "products" | "collections";
+
+/** Which cart lines a discount is allowed to touch. */
+export type AppliesTo = {
+  type: AppliesToType;
+  productIds: string[];
+  collectionIds: string[];
+};
+
+export const ALL_PRODUCTS: AppliesTo = {
+  type: "all",
+  productIds: [],
+  collectionIds: [],
+};
+
 export type TierConfig =
-  | { status: "ok"; version: number; tiers: Tier[] }
+  | { status: "ok"; version: number; tiers: Tier[]; appliesTo: AppliesTo }
   | { status: "unsupported"; reason: string };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -93,6 +118,34 @@ function normalizeTier(value: unknown): Tier | null {
     percentage,
     maxDiscountedUnits: maxDiscountedUnits.value,
   };
+}
+
+function isGidList(value: unknown): value is string[] {
+  return (
+    Array.isArray(value) &&
+    value.every((entry) => typeof entry === "string" && entry.length > 0)
+  );
+}
+
+/** Absent appliesTo means the config predates targeting, so: every product. */
+function normalizeAppliesTo(value: unknown): AppliesTo | null {
+  if (value === undefined || value === null) return ALL_PRODUCTS;
+  if (!isRecord(value)) return null;
+
+  const { type } = value;
+  if (type !== "all" && type !== "products" && type !== "collections") {
+    return null;
+  }
+
+  const productIds = value.productIds ?? [];
+  const collectionIds = value.collectionIds ?? [];
+
+  if (!isGidList(productIds) || !isGidList(collectionIds)) return null;
+
+  if (type === "products" && productIds.length === 0) return null;
+  if (type === "collections" && collectionIds.length === 0) return null;
+
+  return { type, productIds, collectionIds };
 }
 
 /**
@@ -150,18 +203,61 @@ export function parseTierConfig(jsonValue: unknown): TierConfig {
     normalized.push(parsed);
   }
 
+  const appliesTo = normalizeAppliesTo(jsonValue.appliesTo);
+
+  if (!appliesTo) {
+    return {
+      status: "unsupported",
+      reason:
+        "The saved product targeting is not in a format this version of the app can read.",
+    };
+  }
+
   return {
     status: "ok",
     version,
     tiers: sortTiers(normalized),
+    appliesTo,
   };
 }
 
-export function serializeTierConfig(tiers: Tier[]): string {
+export function serializeTierConfig(
+  tiers: Tier[],
+  appliesTo: AppliesTo,
+): string {
   return JSON.stringify({
     version: TIER_CONFIG_VERSION,
     tiers: sortTiers(tiers),
+    appliesTo,
   });
+}
+
+/**
+ * The Function resolves collection membership through an input query variable,
+ * so the selected collection IDs are written to their own metafield whose keys
+ * are variable names. Always written, including as an empty list, so the
+ * variable is never missing for a discount this app created.
+ */
+export function serializeInputVariables(appliesTo: AppliesTo): string {
+  return JSON.stringify({
+    collectionIds:
+      appliesTo.type === "collections" ? appliesTo.collectionIds : [],
+  });
+}
+
+/** "All products", "3 products", "2 collections". */
+export function summarizeAppliesTo(appliesTo: AppliesTo): string {
+  if (appliesTo.type === "products") {
+    const count = appliesTo.productIds.length;
+    return `${count} ${count === 1 ? "product" : "products"}`;
+  }
+
+  if (appliesTo.type === "collections") {
+    const count = appliesTo.collectionIds.length;
+    return `${count} ${count === 1 ? "collection" : "collections"}`;
+  }
+
+  return "All products";
 }
 
 export function sortTiers(tiers: Tier[]): Tier[] {

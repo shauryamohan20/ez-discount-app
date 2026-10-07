@@ -1,5 +1,21 @@
 import { isCalendarDate } from "./shop-time";
-import { MAX_TIERS, sortTiers, type Tier } from "./tiers";
+import {
+  MAX_TIERS,
+  sortTiers,
+  type AppliesTo,
+  type AppliesToType,
+  type Tier,
+} from "./tiers";
+
+/**
+ * A product or collection the merchant picked. The title is carried for
+ * display only: the config stores IDs, and titles are resolved fresh when a
+ * discount is opened, so a renamed product never shows a stale name.
+ */
+export type ResourceRef = {
+  id: string;
+  title: string;
+};
 
 /** Form state is kept as strings so half typed numbers stay on screen. */
 export type TierRowValues = {
@@ -14,6 +30,9 @@ export type DiscountFormValues = {
   startDate: string;
   endDate: string;
   combinesWithShipping: boolean;
+  appliesToType: AppliesToType;
+  products: ResourceRef[];
+  collections: ResourceRef[];
   tiers: TierRowValues[];
 };
 
@@ -28,6 +47,7 @@ export type DiscountFormErrors = {
   title?: string;
   startDate?: string;
   endDate?: string;
+  appliesTo?: string;
   tiers?: string;
   rows?: Record<string, TierRowErrors>;
 };
@@ -37,6 +57,7 @@ export type ValidatedDiscount = {
   startDate: string;
   endDate: string | null;
   combinesWithShipping: boolean;
+  appliesTo: AppliesTo;
   tiers: Tier[];
 };
 
@@ -71,6 +92,9 @@ export function blankDiscountForm(startDate: string): DiscountFormValues {
     startDate,
     endDate: "",
     combinesWithShipping: true,
+    appliesToType: "all",
+    products: [],
+    collections: [],
     tiers: [
       {
         minQuantity: "2",
@@ -83,7 +107,13 @@ export function blankDiscountForm(startDate: string): DiscountFormValues {
 }
 
 export function hasErrors(errors: DiscountFormErrors): boolean {
-  if (errors.title || errors.startDate || errors.endDate || errors.tiers) {
+  if (
+    errors.title ||
+    errors.startDate ||
+    errors.endDate ||
+    errors.appliesTo ||
+    errors.tiers
+  ) {
     return true;
   }
 
@@ -132,6 +162,15 @@ export function validateDiscountForm(
     errors.endDate = "Enter a valid date.";
   } else if (endDate && startDate && endDate <= startDate) {
     errors.endDate = "The end date must be after the start date.";
+  }
+
+  if (values.appliesToType === "products" && values.products.length === 0) {
+    errors.appliesTo = "Choose at least one product.";
+  } else if (
+    values.appliesToType === "collections" &&
+    values.collections.length === 0
+  ) {
+    errors.appliesTo = "Choose at least one collection.";
   }
 
   if (values.tiers.length === 0) {
@@ -248,6 +287,17 @@ export function validateDiscountForm(
       startDate,
       endDate: endDate || null,
       combinesWithShipping: values.combinesWithShipping,
+      appliesTo: {
+        type: values.appliesToType,
+        productIds:
+          values.appliesToType === "products"
+            ? values.products.map((product) => product.id)
+            : [],
+        collectionIds:
+          values.appliesToType === "collections"
+            ? values.collections.map((collection) => collection.id)
+            : [],
+      },
       tiers: sortTiers(parsed.map((row) => row.tier)),
     },
   };
@@ -274,13 +324,41 @@ export function discountFormValuesFromFormData(
     tiers = [];
   }
 
+  const appliesToType = String(formData.get("appliesToType") ?? "all");
+
   return {
     title: String(formData.get("title") ?? ""),
     startDate: String(formData.get("startDate") ?? ""),
     endDate: String(formData.get("endDate") ?? ""),
     combinesWithShipping: formData.get("combinesWithShipping") === "true",
+    appliesToType:
+      appliesToType === "products" || appliesToType === "collections"
+        ? appliesToType
+        : "all",
+    products: resourceRefsFromFormData(formData, "products"),
+    collections: resourceRefsFromFormData(formData, "collections"),
     tiers,
   };
+}
+
+function resourceRefsFromFormData(
+  formData: FormData,
+  field: string,
+): ResourceRef[] {
+  try {
+    const parsed = JSON.parse(String(formData.get(field) ?? "[]"));
+
+    if (!Array.isArray(parsed)) return [];
+
+    return parsed
+      .map((entry) => ({
+        id: String(entry?.id ?? ""),
+        title: String(entry?.title ?? ""),
+      }))
+      .filter((entry) => entry.id !== "");
+  } catch {
+    return [];
+  }
 }
 
 type UserErrorLike = {
