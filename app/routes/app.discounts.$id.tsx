@@ -165,7 +165,7 @@ export default function EditDiscountPage() {
   };
 
   return (
-    <s-page heading="Edit tiered discount">
+    <s-page heading="Edit quantity based discount">
       <s-link slot="breadcrumb-actions" href="/app/discounts">
         Discounts
       </s-link>

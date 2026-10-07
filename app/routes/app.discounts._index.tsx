@@ -198,7 +198,7 @@ export default function DiscountsPage() {
   };
 
   return (
-    <s-page heading="Tiered discounts">
+    <s-page heading="Quantity based discounts">
       <s-button
         slot="primary-action"
         variant="primary"
@@ -229,7 +229,7 @@ export default function DiscountsPage() {
 
       {!error && discounts.length === 0 ? (
         <s-section>
-          <s-empty-state heading="No tiered discounts yet">
+          <s-empty-state heading="No quantity based discounts yet">
             <s-text slot="subheading">
               Create a discount that takes more off the more items a customer
               adds to their cart.

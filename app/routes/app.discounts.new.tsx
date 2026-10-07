@@ -115,7 +115,7 @@ export default function NewDiscountPage() {
   };
 
   return (
-    <s-page heading="Create tiered discount">
+    <s-page heading="Create quantity based discount">
       <s-link slot="breadcrumb-actions" href="/app/discounts">
         Discounts
       </s-link>

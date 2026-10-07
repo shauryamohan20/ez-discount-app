@@ -1,4 +1,4 @@
 {
-  "name": "tiered-discount",
-  "description": "tiered-discount"
+  "name": "Quantity Based Discount",
+  "description": "Takes a percentage off the cart based on how many items the customer buys."
 }

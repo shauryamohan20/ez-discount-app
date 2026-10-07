@@ -37,7 +37,7 @@ export default function HomePage() {
         Create discount
       </s-button>
 
-      <s-section heading="Tiered quantity discounts">
+      <s-section heading="Quantity based discounts">
         <s-stack direction="block" gap="base">
           <s-paragraph>
             Reward customers for buying more. Set a percentage off for each
@@ -56,7 +56,8 @@ export default function HomePage() {
             </s-paragraph>
           ) : (
             <s-paragraph>
-              You have {total} tiered {total === 1 ? "discount" : "discounts"},{" "}
+              You have {total} quantity based{" "}
+              {total === 1 ? "discount" : "discounts"},{" "}
               {active} of them active.{" "}
               <s-link href="/app/discounts">Manage discounts</s-link>.
             </s-paragraph>

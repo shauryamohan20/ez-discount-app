@@ -30,7 +30,7 @@ export default function App() {
   return (
     <div className={styles.index}>
       <div className={styles.content}>
-        <h1 className={styles.heading}>Tiered discounts, without the code</h1>
+        <h1 className={styles.heading}>Quantity based discounts, made simple</h1>
         <p className={styles.text}>
           Reward customers for buying more. Set quantity tiers once, and the
           right percentage comes off the cart automatically.
@@ -53,8 +53,8 @@ export default function App() {
             own, so customers never need a code.
           </li>
           <li>
-            <strong>Tiered</strong>. Give a bigger percentage off as the cart
-            quantity grows, with as many tiers as you need.
+            <strong>Quantity based</strong>. Give a bigger percentage off as the
+            cart quantity grows, with as many tiers as you need.
           </li>
           <li>
             <strong>In your control</strong>. Schedule a start and end date, and
