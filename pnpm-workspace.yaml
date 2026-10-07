@@ -5,6 +5,11 @@ allowBuilds:
   '@parcel/watcher': true
   '@prisma/client': true
   '@prisma/engines': true
+  core-js: false
   esbuild: true
   prisma: true
   unrs-resolver: true
+overrides:
+  "p-map": "^4.0.0"
+  "qs": "^6.16.0"
+  "restore-cursor>onetime": "^5.1.2"
