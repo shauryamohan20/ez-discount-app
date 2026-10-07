@@ -340,3 +340,111 @@ export async function updateTieredDiscount(
 
   return { ok: true, id: payload.automaticAppDiscount.discountId };
 }
+
+const ACTIVATE_DISCOUNT_MUTATION = `#graphql
+  mutation ActivateTieredDiscount($id: ID!) {
+    discountAutomaticActivate(id: $id) {
+      automaticDiscountNode {
+        id
+      }
+      userErrors {
+        field
+        message
+      }
+    }
+  }
+`;
+
+const DEACTIVATE_DISCOUNT_MUTATION = `#graphql
+  mutation DeactivateTieredDiscount($id: ID!) {
+    discountAutomaticDeactivate(id: $id) {
+      automaticDiscountNode {
+        id
+      }
+      userErrors {
+        field
+        message
+      }
+    }
+  }
+`;
+
+const DELETE_DISCOUNT_MUTATION = `#graphql
+  mutation DeleteTieredDiscount($id: ID!) {
+    discountAutomaticDelete(id: $id) {
+      deletedAutomaticDiscountId
+      userErrors {
+        field
+        message
+      }
+    }
+  }
+`;
+
+/**
+ * Activating rewrites dates: Shopify moves startsAt to now for a scheduled
+ * discount, and clears endsAt for an expired one. Deactivating ends the
+ * discount by setting endsAt to now, which is why its status becomes expired
+ * rather than scheduled.
+ */
+export async function setTieredDiscountActive(
+  admin: AdminApiContext,
+  id: string,
+  active: boolean,
+): Promise<MutationResult> {
+  const field = active
+    ? "discountAutomaticActivate"
+    : "discountAutomaticDeactivate";
+
+  const data = await adminRequest<
+    Record<
+      string,
+      {
+        automaticDiscountNode: { id: string } | null;
+        userErrors: DiscountUserError[];
+      }
+    >
+  >(
+    admin,
+    active ? ACTIVATE_DISCOUNT_MUTATION : DEACTIVATE_DISCOUNT_MUTATION,
+    { id },
+  );
+
+  const payload = data[field];
+
+  if (payload.userErrors.length > 0 || !payload.automaticDiscountNode) {
+    return {
+      ok: false,
+      userErrors: payload.userErrors.length
+        ? payload.userErrors
+        : [{ message: "Shopify did not return the updated discount." }],
+    };
+  }
+
+  return { ok: true, id: payload.automaticDiscountNode.id };
+}
+
+export async function deleteTieredDiscount(
+  admin: AdminApiContext,
+  id: string,
+): Promise<MutationResult> {
+  const data = await adminRequest<{
+    discountAutomaticDelete: {
+      deletedAutomaticDiscountId: string | null;
+      userErrors: DiscountUserError[];
+    };
+  }>(admin, DELETE_DISCOUNT_MUTATION, { id });
+
+  const payload = data.discountAutomaticDelete;
+
+  if (payload.userErrors.length > 0 || !payload.deletedAutomaticDiscountId) {
+    return {
+      ok: false,
+      userErrors: payload.userErrors.length
+        ? payload.userErrors
+        : [{ message: "Shopify did not confirm the discount was deleted." }],
+    };
+  }
+
+  return { ok: true, id: payload.deletedAutomaticDiscountId };
+}
