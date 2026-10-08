@@ -42,7 +42,7 @@ import { toDiscountGid } from "../lib/discount-id";
 export const loader = async ({ request, params }: LoaderFunctionArgs) => {
   const { admin } = await authenticate.admin(request);
 
-  const id = toDiscountGid(params.id);
+  const id = toDiscountGid(params.method, params.id);
   if (!id) {
     throw new Response("Not found", { status: 404 });
   }
@@ -78,6 +78,10 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
       shopIsoToCalendarDate(discount.startsAt, offsetMinutes) ||
       todayInShop(offsetMinutes),
     endDate: shopIsoToCalendarDate(discount.endsAt, offsetMinutes),
+    method: discount.method,
+    code: discount.code ?? "",
+    usageLimit: discount.usageLimit === null ? "" : String(discount.usageLimit),
+    appliesOncePerCustomer: discount.appliesOncePerCustomer,
     combinesWithShipping: discount.combinesWithShipping,
     appliesToType: appliesTo.type,
     products: appliesTo.type === "products" ? resources : [],
@@ -90,6 +94,7 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
 
   return {
     values,
+    usageCount: discount.usageCount,
     unsupportedReason: config.status === "ok" ? null : config.reason,
   };
 };
@@ -97,7 +102,7 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
 export const action = async ({ request, params }: ActionFunctionArgs) => {
   const { admin } = await authenticate.admin(request);
 
-  const id = toDiscountGid(params.id);
+  const id = toDiscountGid(params.method, params.id);
   if (!id) {
     throw new Response("Not found", { status: 404 });
   }
@@ -113,6 +118,10 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
   try {
     const offsetMinutes = await getShopTimezoneOffsetMinutes(admin);
     const {
+      method,
+      code,
+      usageLimit,
+      appliesOncePerCustomer,
       title,
       startDate,
       endDate,
@@ -123,6 +132,10 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
     } = validation.value;
 
     const result = await updateTieredDiscount(admin, id, {
+      method,
+      code,
+      usageLimit,
+      appliesOncePerCustomer,
       title,
       startsAt: calendarDateToShopIso(startDate, offsetMinutes),
       endsAt: endDate
@@ -156,7 +169,7 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
 };
 
 export default function EditDiscountPage() {
-  const { values: loadedValues, unsupportedReason } =
+  const { values: loadedValues, usageCount, unsupportedReason } =
     useLoaderData<typeof loader>();
   const fetcher = useFetcher<typeof action>();
 
@@ -184,6 +197,10 @@ export default function EditDiscountPage() {
         startDate: values.startDate,
         endDate: values.endDate,
         combinesWithShipping: String(values.combinesWithShipping),
+        method: values.method,
+        code: values.code,
+        usageLimit: values.usageLimit,
+        appliesOncePerCustomer: String(values.appliesOncePerCustomer),
         appliesToType: values.appliesToType,
         customerEligibility: values.customerEligibility,
         products: JSON.stringify(values.products),
@@ -236,10 +253,21 @@ export default function EditDiscountPage() {
         </s-banner>
       )}
 
+      {values.method === "code" && usageCount > 0 && (
+        <s-banner slot="supplemental-start" tone="info">
+          <s-paragraph>
+            This code has been used {usageCount}{" "}
+            {usageCount === 1 ? "time" : "times"}. Shopify updates that count
+            asynchronously, so it can lag a little behind.
+          </s-paragraph>
+        </s-banner>
+      )}
+
       <TieredDiscountForm
         values={values}
         errors={errors}
         disabled={saving}
+        methodLocked
         onChange={setValues}
       />
     </s-page>

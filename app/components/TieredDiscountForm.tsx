@@ -1,6 +1,8 @@
 import { useAppBridge } from "@shopify/app-bridge-react";
 
+import { isDiscountMethod } from "../lib/discount-id";
 import {
+  MAX_CODE_LENGTH,
   MAX_TITLE_LENGTH,
   emptyTierRow,
   type DiscountFormErrors,
@@ -19,6 +21,8 @@ type Props = {
   values: DiscountFormValues;
   errors: DiscountFormErrors;
   disabled?: boolean;
+  /** True on edit: a discount cannot change between automatic and code. */
+  methodLocked?: boolean;
   onChange: (values: DiscountFormValues) => void;
 };
 
@@ -26,6 +30,7 @@ export function TieredDiscountForm({
   values,
   errors,
   disabled = false,
+  methodLocked = false,
   onChange,
 }: Props) {
   const shopify = useAppBridge();
@@ -92,6 +97,96 @@ export function TieredDiscountForm({
 
   return (
     <>
+      <s-section heading="Method">
+        <s-stack direction="block" gap="base">
+          <s-choice-list
+            name="method"
+            label="How customers get this discount"
+            labelAccessibilityVisibility="exclusive"
+            values={[values.method]}
+            {...(disabled || methodLocked ? { disabled: true } : {})}
+            onChange={(event) => {
+              const list =
+                event.currentTarget as HTMLElementTagNameMap["s-choice-list"];
+              const next = list.values[0];
+
+              if (isDiscountMethod(next)) update({ method: next });
+            }}
+          >
+            <s-choice value="automatic">
+              Automatic discount
+              <s-text slot="details">
+                Applies in the cart on its own, with no code to enter.
+              </s-text>
+            </s-choice>
+            <s-choice value="code">
+              Discount code
+              <s-text slot="details">
+                Customers enter a code at checkout. Only codes can have usage
+                limits.
+              </s-text>
+            </s-choice>
+          </s-choice-list>
+
+          {methodLocked && (
+            <s-text color="subdued">
+              The method cannot be changed after a discount is created. Create a
+              new discount to switch.
+            </s-text>
+          )}
+
+          {values.method === "code" && (
+            <>
+              <s-text-field
+                label="Discount code"
+                name="code"
+                value={values.code}
+                maxLength={MAX_CODE_LENGTH}
+                details="Customers type this at checkout. Codes are not case sensitive."
+                {...(errors.code ? { error: errors.code } : {})}
+                {...(disabled ? { disabled: true } : {})}
+                onInput={(event) =>
+                  update({ code: event.currentTarget.value.toUpperCase() })
+                }
+              />
+
+              <s-number-field
+                label="Total number of uses"
+                name="usageLimit"
+                value={values.usageLimit}
+                min={1}
+                step={1}
+                inputMode="numeric"
+                details="Across all customers. Leave empty for unlimited."
+                {...(errors.usageLimit ? { error: errors.usageLimit } : {})}
+                {...(disabled ? { disabled: true } : {})}
+                onInput={(event) =>
+                  update({ usageLimit: event.currentTarget.value })
+                }
+              />
+
+              <s-checkbox
+                label="Limit to one use per customer"
+                name="appliesOncePerCustomer"
+                checked={values.appliesOncePerCustomer}
+                {...(disabled ? { disabled: true } : {})}
+                onChange={(event) =>
+                  update({
+                    appliesOncePerCustomer: event.currentTarget.checked,
+                  })
+                }
+              />
+
+              <s-text color="subdued">
+                Shopify counts uses per customer as once or unlimited, so a
+                limit of a specific number of uses per customer is not
+                available.
+              </s-text>
+            </>
+          )}
+        </s-stack>
+      </s-section>
+
       <s-section heading="Discount details">
         <s-stack direction="block" gap="base">
           <s-text-field

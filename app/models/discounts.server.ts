@@ -14,17 +14,25 @@ import {
   type Tier,
   type TierConfig,
 } from "../lib/tiers";
+import { methodFromGid, type DiscountMethod } from "../lib/discount-id";
 
 export type DiscountStatus = "ACTIVE" | "EXPIRED" | "SCHEDULED";
 
 export type TieredDiscount = {
-  /** gid://shopify/DiscountAutomaticNode/... */
+  /** gid://shopify/DiscountAutomaticNode/... or .../DiscountCodeNode/... */
   id: string;
+  method: DiscountMethod;
   title: string;
   status: DiscountStatus;
   startsAt: string;
   endsAt: string | null;
   combinesWithShipping: boolean;
+  /** Code discounts only. */
+  code: string | null;
+  usageLimit: number | null;
+  appliesOncePerCustomer: boolean;
+  /** Shopify updates this asynchronously, so it can lag behind real usage. */
+  usageCount: number;
   config: TierConfig;
 };
 
@@ -47,10 +55,14 @@ type DiscountNodePayload = {
       productDiscounts: boolean;
       shippingDiscounts: boolean;
     };
+    usageLimit?: number | null;
+    appliesOncePerCustomer?: boolean;
+    asyncUsageCount?: number;
+    codes?: { nodes: { code: string }[] };
   };
 };
 
-/** How many pages of automatic discounts the list page will walk through. */
+/** How many pages of app discounts the list page will walk through. */
 const MAX_PAGES = 5;
 const PAGE_SIZE = 100;
 
@@ -73,6 +85,25 @@ const DISCOUNT_NODE_FRAGMENT = `#graphql
           shippingDiscounts
         }
       }
+      ... on DiscountCodeApp {
+        title
+        status
+        startsAt
+        endsAt
+        usageLimit
+        appliesOncePerCustomer
+        asyncUsageCount
+        codes(first: 1) {
+          nodes {
+            code
+          }
+        }
+        combinesWith {
+          orderDiscounts
+          productDiscounts
+          shippingDiscounts
+        }
+      }
     }
   }
 `;
@@ -82,7 +113,7 @@ const TIERED_DISCOUNTS_QUERY = `#graphql
     discountNodes(
       first: $first
       after: $after
-      query: "method:automatic"
+      query: "type:app"
       sortKey: CREATED_AT
       reverse: true
     ) {
@@ -138,21 +169,36 @@ async function adminRequest<T>(
 }
 
 /**
- * A node belongs to this app when it is an automatic app discount that carries
- * our config metafield. The `$app:tiered` namespace resolves to this app's
- * reserved namespace, so another app's discounts can never match.
+ * A node belongs to this app when it is an app discount, automatic or code,
+ * that carries our config metafield. The `$app:tiered` namespace resolves to
+ * this app's reserved namespace, so another app's discounts can never match.
  */
 function toTieredDiscount(node: DiscountNodePayload): TieredDiscount | null {
-  if (node.discount.__typename !== "DiscountAutomaticApp") return null;
+  const typename = node.discount.__typename;
+
+  if (typename !== "DiscountAutomaticApp" && typename !== "DiscountCodeApp") {
+    return null;
+  }
+
   if (!node.metafield) return null;
+
+  // The method decides which family of mutations applies to this discount, so
+  // it is read from the ID rather than inferred from the shape of the payload.
+  const method = methodFromGid(node.id);
+  if (!method) return null;
 
   return {
     id: node.id,
+    method,
     title: node.discount.title ?? "",
     status: node.discount.status ?? "EXPIRED",
     startsAt: node.discount.startsAt ?? "",
     endsAt: node.discount.endsAt ?? null,
     combinesWithShipping: node.discount.combinesWith?.shippingDiscounts ?? false,
+    code: node.discount.codes?.nodes[0]?.code ?? null,
+    usageLimit: node.discount.usageLimit ?? null,
+    appliesOncePerCustomer: node.discount.appliesOncePerCustomer ?? false,
+    usageCount: node.discount.asyncUsageCount ?? 0,
     config: parseTierConfig(node.metafield.jsonValue),
   };
 }
@@ -213,6 +259,11 @@ export async function getTieredDiscount(
 }
 
 export type TieredDiscountInput = {
+  method: DiscountMethod;
+  /** Required when the method is code, ignored otherwise. */
+  code: string | null;
+  usageLimit: number | null;
+  appliesOncePerCustomer: boolean;
   title: string;
   /** ISO 8601 instant, already resolved against the shop's time zone. */
   startsAt: string;
@@ -232,10 +283,24 @@ export type MutationResult =
   | { ok: true; id: string }
   | { ok: false; userErrors: DiscountUserError[] };
 
-const CREATE_DISCOUNT_MUTATION = `#graphql
+const CREATE_AUTOMATIC_MUTATION = `#graphql
   mutation CreateTieredDiscount($discount: DiscountAutomaticAppInput!) {
     discountAutomaticAppCreate(automaticAppDiscount: $discount) {
       automaticAppDiscount {
+        discountId
+      }
+      userErrors {
+        field
+        message
+      }
+    }
+  }
+`;
+
+const CREATE_CODE_MUTATION = `#graphql
+  mutation CreateTieredCodeDiscount($discount: DiscountCodeAppInput!) {
+    discountCodeAppCreate(codeAppDiscount: $discount) {
+      codeAppDiscount {
         discountId
       }
       userErrors {
@@ -282,16 +347,65 @@ function toDiscountInput(input: TieredDiscountInput) {
   };
 }
 
+/**
+ * Usage limits and once per customer only exist on code discounts. Shopify has
+ * nothing to count for an automatic discount, so those fields are dropped
+ * rather than silently ignored.
+ */
+function toCodeDiscountInput(input: TieredDiscountInput) {
+  return {
+    ...toDiscountInput(input),
+    code: input.code ?? "",
+    usageLimit: input.usageLimit,
+    appliesOncePerCustomer: input.appliesOncePerCustomer,
+  };
+}
+
+function failed(
+  userErrors: DiscountUserError[],
+  fallback: string,
+): MutationResult {
+  return {
+    ok: false,
+    userErrors: userErrors.length ? userErrors : [{ message: fallback }],
+  };
+}
+
 export async function createTieredDiscount(
   admin: AdminApiContext,
   input: TieredDiscountInput,
 ): Promise<MutationResult> {
+  if (input.method === "code") {
+    const data = await adminRequest<{
+      discountCodeAppCreate: {
+        codeAppDiscount: { discountId: string } | null;
+        userErrors: DiscountUserError[];
+      };
+    }>(admin, CREATE_CODE_MUTATION, {
+      discount: {
+        ...toCodeDiscountInput(input),
+        functionHandle: DISCOUNT_FUNCTION_HANDLE,
+      },
+    });
+
+    const payload = data.discountCodeAppCreate;
+
+    if (payload.userErrors.length > 0 || !payload.codeAppDiscount) {
+      return failed(
+        payload.userErrors,
+        "Shopify did not return the created discount.",
+      );
+    }
+
+    return { ok: true, id: payload.codeAppDiscount.discountId };
+  }
+
   const data = await adminRequest<{
     discountAutomaticAppCreate: {
       automaticAppDiscount: { discountId: string } | null;
       userErrors: DiscountUserError[];
     };
-  }>(admin, CREATE_DISCOUNT_MUTATION, {
+  }>(admin, CREATE_AUTOMATIC_MUTATION, {
     discount: {
       ...toDiscountInput(input),
       functionHandle: DISCOUNT_FUNCTION_HANDLE,
@@ -301,16 +415,28 @@ export async function createTieredDiscount(
   const payload = data.discountAutomaticAppCreate;
 
   if (payload.userErrors.length > 0 || !payload.automaticAppDiscount) {
-    return {
-      ok: false,
-      userErrors: payload.userErrors.length
-        ? payload.userErrors
-        : [{ message: "Shopify did not return the created discount." }],
-    };
+    return failed(
+      payload.userErrors,
+      "Shopify did not return the created discount.",
+    );
   }
 
   return { ok: true, id: payload.automaticAppDiscount.discountId };
 }
+
+const UPDATE_CODE_MUTATION = `#graphql
+  mutation UpdateTieredCodeDiscount($id: ID!, $discount: DiscountCodeAppInput!) {
+    discountCodeAppUpdate(id: $id, codeAppDiscount: $discount) {
+      codeAppDiscount {
+        discountId
+      }
+      userErrors {
+        field
+        message
+      }
+    }
+  }
+`;
 
 const UPDATE_DISCOUNT_MUTATION = `#graphql
   mutation UpdateTieredDiscount($id: ID!, $discount: DiscountAutomaticAppInput!) {
@@ -331,6 +457,29 @@ export async function updateTieredDiscount(
   id: string,
   input: TieredDiscountInput,
 ): Promise<MutationResult> {
+  if (input.method === "code") {
+    const data = await adminRequest<{
+      discountCodeAppUpdate: {
+        codeAppDiscount: { discountId: string } | null;
+        userErrors: DiscountUserError[];
+      };
+    }>(admin, UPDATE_CODE_MUTATION, {
+      id,
+      discount: toCodeDiscountInput(input),
+    });
+
+    const payload = data.discountCodeAppUpdate;
+
+    if (payload.userErrors.length > 0 || !payload.codeAppDiscount) {
+      return failed(
+        payload.userErrors,
+        "Shopify did not return the updated discount.",
+      );
+    }
+
+    return { ok: true, id: payload.codeAppDiscount.discountId };
+  }
+
   const data = await adminRequest<{
     discountAutomaticAppUpdate: {
       automaticAppDiscount: { discountId: string } | null;
@@ -346,12 +495,10 @@ export async function updateTieredDiscount(
   const payload = data.discountAutomaticAppUpdate;
 
   if (payload.userErrors.length > 0 || !payload.automaticAppDiscount) {
-    return {
-      ok: false,
-      userErrors: payload.userErrors.length
-        ? payload.userErrors
-        : [{ message: "Shopify did not return the updated discount." }],
-    };
+    return failed(
+      payload.userErrors,
+      "Shopify did not return the updated discount.",
+    );
   }
 
   return { ok: true, id: payload.automaticAppDiscount.discountId };
@@ -397,6 +544,46 @@ const DELETE_DISCOUNT_MUTATION = `#graphql
   }
 `;
 
+const ACTIVATE_CODE_MUTATION = `#graphql
+  mutation ActivateTieredCodeDiscount($id: ID!) {
+    discountCodeActivate(id: $id) {
+      codeDiscountNode {
+        id
+      }
+      userErrors {
+        field
+        message
+      }
+    }
+  }
+`;
+
+const DEACTIVATE_CODE_MUTATION = `#graphql
+  mutation DeactivateTieredCodeDiscount($id: ID!) {
+    discountCodeDeactivate(id: $id) {
+      codeDiscountNode {
+        id
+      }
+      userErrors {
+        field
+        message
+      }
+    }
+  }
+`;
+
+const DELETE_CODE_MUTATION = `#graphql
+  mutation DeleteTieredCodeDiscount($id: ID!) {
+    discountCodeDelete(id: $id) {
+      deletedCodeDiscountId
+      userErrors {
+        field
+        message
+      }
+    }
+  }
+`;
+
 /**
  * Activating rewrites dates: Shopify moves startsAt to now for a scheduled
  * discount, and clears endsAt for an expired one. Deactivating ends the
@@ -408,6 +595,35 @@ export async function setTieredDiscountActive(
   id: string,
   active: boolean,
 ): Promise<MutationResult> {
+  if (methodFromGid(id) === "code") {
+    const codeField = active
+      ? "discountCodeActivate"
+      : "discountCodeDeactivate";
+
+    const data = await adminRequest<
+      Record<
+        string,
+        {
+          codeDiscountNode: { id: string } | null;
+          userErrors: DiscountUserError[];
+        }
+      >
+    >(admin, active ? ACTIVATE_CODE_MUTATION : DEACTIVATE_CODE_MUTATION, {
+      id,
+    });
+
+    const codePayload = data[codeField];
+
+    if (codePayload.userErrors.length > 0 || !codePayload.codeDiscountNode) {
+      return failed(
+        codePayload.userErrors,
+        "Shopify did not return the updated discount.",
+      );
+    }
+
+    return { ok: true, id: codePayload.codeDiscountNode.id };
+  }
+
   const field = active
     ? "discountAutomaticActivate"
     : "discountAutomaticDeactivate";
@@ -429,12 +645,10 @@ export async function setTieredDiscountActive(
   const payload = data[field];
 
   if (payload.userErrors.length > 0 || !payload.automaticDiscountNode) {
-    return {
-      ok: false,
-      userErrors: payload.userErrors.length
-        ? payload.userErrors
-        : [{ message: "Shopify did not return the updated discount." }],
-    };
+    return failed(
+      payload.userErrors,
+      "Shopify did not return the updated discount.",
+    );
   }
 
   return { ok: true, id: payload.automaticDiscountNode.id };
@@ -444,6 +658,26 @@ export async function deleteTieredDiscount(
   admin: AdminApiContext,
   id: string,
 ): Promise<MutationResult> {
+  if (methodFromGid(id) === "code") {
+    const data = await adminRequest<{
+      discountCodeDelete: {
+        deletedCodeDiscountId: string | null;
+        userErrors: DiscountUserError[];
+      };
+    }>(admin, DELETE_CODE_MUTATION, { id });
+
+    const payload = data.discountCodeDelete;
+
+    if (payload.userErrors.length > 0 || !payload.deletedCodeDiscountId) {
+      return failed(
+        payload.userErrors,
+        "Shopify did not confirm the discount was deleted.",
+      );
+    }
+
+    return { ok: true, id: payload.deletedCodeDiscountId };
+  }
+
   const data = await adminRequest<{
     discountAutomaticDelete: {
       deletedAutomaticDiscountId: string | null;
@@ -454,12 +688,10 @@ export async function deleteTieredDiscount(
   const payload = data.discountAutomaticDelete;
 
   if (payload.userErrors.length > 0 || !payload.deletedAutomaticDiscountId) {
-    return {
-      ok: false,
-      userErrors: payload.userErrors.length
-        ? payload.userErrors
-        : [{ message: "Shopify did not confirm the discount was deleted." }],
-    };
+    return failed(
+      payload.userErrors,
+      "Shopify did not confirm the discount was deleted.",
+    );
   }
 
   return { ok: true, id: payload.deletedAutomaticDiscountId };

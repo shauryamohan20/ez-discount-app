@@ -42,7 +42,7 @@ export default function HomePage() {
           <s-paragraph>
             Reward customers for buying more. Set a percentage off for each
             quantity threshold, and the cart gets the best tier it qualifies
-            for, automatically. No discount code needed.
+            for. Run it automatically, or behind a discount code.
           </s-paragraph>
 
           {loadFailed ? (

@@ -1,3 +1,4 @@
+import type { DiscountMethod } from "./discount-id";
 import { isCalendarDate } from "./shop-time";
 import {
   MAX_TIERS,
@@ -28,6 +29,11 @@ export type TierRowValues = {
 };
 
 export type DiscountFormValues = {
+  /** Chosen at creation and fixed afterwards: the two are different resources. */
+  method: DiscountMethod;
+  code: string;
+  usageLimit: string;
+  appliesOncePerCustomer: boolean;
   title: string;
   startDate: string;
   endDate: string;
@@ -47,6 +53,8 @@ export type TierRowErrors = {
 };
 
 export type DiscountFormErrors = {
+  code?: string;
+  usageLimit?: string;
   title?: string;
   startDate?: string;
   endDate?: string;
@@ -56,6 +64,10 @@ export type DiscountFormErrors = {
 };
 
 export type ValidatedDiscount = {
+  method: DiscountMethod;
+  code: string | null;
+  usageLimit: number | null;
+  appliesOncePerCustomer: boolean;
   title: string;
   startDate: string;
   endDate: string | null;
@@ -70,6 +82,7 @@ export type ValidationResult =
   | { ok: false; errors: DiscountFormErrors };
 
 export const MAX_TITLE_LENGTH = 255;
+export const MAX_CODE_LENGTH = 255;
 
 export function emptyTierRow(): TierRowValues {
   return {
@@ -90,8 +103,15 @@ export function tierToRow(tier: Tier): TierRowValues {
   };
 }
 
-export function blankDiscountForm(startDate: string): DiscountFormValues {
+export function blankDiscountForm(
+  startDate: string,
+  method: DiscountMethod = "automatic",
+): DiscountFormValues {
   return {
+    method,
+    code: "",
+    usageLimit: "",
+    appliesOncePerCustomer: false,
     title: "",
     startDate,
     endDate: "",
@@ -113,6 +133,8 @@ export function blankDiscountForm(startDate: string): DiscountFormValues {
 
 export function hasErrors(errors: DiscountFormErrors): boolean {
   if (
+    errors.code ||
+    errors.usageLimit ||
     errors.title ||
     errors.startDate ||
     errors.endDate ||
@@ -153,6 +175,32 @@ export function validateDiscountForm(
     errors.title = "Give the discount a title.";
   } else if (title.length > MAX_TITLE_LENGTH) {
     errors.title = `Keep the title under ${MAX_TITLE_LENGTH} characters.`;
+  }
+
+  const code = values.code.trim();
+  if (values.method === "code") {
+    if (!code) {
+      errors.code = "Enter the code customers will type at checkout.";
+    } else if (/\s/.test(code)) {
+      errors.code = "A code cannot contain spaces.";
+    } else if (code.length > MAX_CODE_LENGTH) {
+      errors.code = `Keep the code under ${MAX_CODE_LENGTH} characters.`;
+    }
+  }
+
+  const usageLimitRaw = values.usageLimit.trim();
+  let usageLimit: number | null = null;
+
+  if (values.method === "code" && usageLimitRaw !== "") {
+    const parsedLimit = parseNumber(usageLimitRaw);
+
+    if (parsedLimit === null || !Number.isInteger(parsedLimit)) {
+      errors.usageLimit = "Use a whole number.";
+    } else if (parsedLimit < 1) {
+      errors.usageLimit = "Use 1 or more.";
+    } else {
+      usageLimit = parsedLimit;
+    }
   }
 
   const startDate = values.startDate.trim();
@@ -288,6 +336,11 @@ export function validateDiscountForm(
   return {
     ok: true,
     value: {
+      method: values.method,
+      code: values.method === "code" ? code : null,
+      usageLimit: values.method === "code" ? usageLimit : null,
+      appliesOncePerCustomer:
+        values.method === "code" ? values.appliesOncePerCustomer : false,
       title,
       startDate,
       endDate: endDate || null,
@@ -332,8 +385,13 @@ export function discountFormValuesFromFormData(
 
   const appliesToType = String(formData.get("appliesToType") ?? "all");
   const customerEligibility = formData.get("customerEligibility");
+  const method = formData.get("method");
 
   return {
+    method: method === "code" ? "code" : "automatic",
+    code: String(formData.get("code") ?? ""),
+    usageLimit: String(formData.get("usageLimit") ?? ""),
+    appliesOncePerCustomer: formData.get("appliesOncePerCustomer") === "true",
     title: String(formData.get("title") ?? ""),
     startDate: String(formData.get("startDate") ?? ""),
     endDate: String(formData.get("endDate") ?? ""),
@@ -394,6 +452,12 @@ export function mapUserErrors(userErrors: UserErrorLike[]): {
     switch (field) {
       case "title":
         errors.title = userError.message;
+        break;
+      case "code":
+        errors.code = userError.message;
+        break;
+      case "usageLimit":
+        errors.usageLimit = userError.message;
         break;
       case "startsAt":
         errors.startDate = userError.message;

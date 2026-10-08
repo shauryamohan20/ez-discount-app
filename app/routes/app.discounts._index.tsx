@@ -25,7 +25,11 @@ import type {
   MutationResult,
   TieredDiscount,
 } from "../models/discounts.server";
-import { toDiscountGid, toDiscountNumericId } from "../lib/discount-id";
+import {
+  discountPath,
+  toDiscountGid,
+  toDiscountNumericId,
+} from "../lib/discount-id";
 import { formatShopDate } from "../lib/shop-time";
 import {
   CUSTOMER_ELIGIBILITY_LABELS,
@@ -79,7 +83,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
   const formData = await request.formData();
   const intent = String(formData.get("intent") ?? "");
-  const id = toDiscountGid(String(formData.get("id") ?? ""));
+  const id = toDiscountGid(
+    String(formData.get("method") ?? ""),
+    String(formData.get("id") ?? ""),
+  );
 
   if (!id) {
     return { ok: false, message: "That discount could not be found." };
@@ -128,6 +135,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 type PendingAction = {
   intent: "activate" | "delete";
   id: string;
+  method: string;
   heading: string;
   body: string;
   confirmLabel: string;
@@ -162,14 +170,17 @@ export default function DiscountsPage() {
   const actionError =
     fetcher.data && !fetcher.data.ok ? fetcher.data.message : null;
 
-  const run = (intent: string, numericId: string) => {
-    fetcher.submit({ intent, id: numericId }, { method: "POST" });
+  const run = (intent: string, numericId: string, discountMethod: string) => {
+    fetcher.submit(
+      { intent, id: numericId, method: discountMethod },
+      { method: "POST" },
+    );
   };
 
   const confirmPending = () => {
     if (!pending) return;
 
-    run(pending.intent, pending.id);
+    run(pending.intent, pending.id, pending.method);
     setPending(null);
   };
 
@@ -177,6 +188,7 @@ export default function DiscountsPage() {
     setPending({
       intent: "activate",
       id: numericId,
+      method: discount.method,
       heading: "Activate this discount?",
       body:
         discount.status === "SCHEDULED"
@@ -194,8 +206,12 @@ export default function DiscountsPage() {
     setPending({
       intent: "delete",
       id: numericId,
+      method: discount.method,
       heading: "Delete this discount?",
-      body: `${discount.title} will be removed from your store and will stop applying at checkout. This cannot be undone.`,
+      body:
+        discount.method === "code"
+          ? `${discount.title} will be removed from your store, and the code ${discount.code} will stop working at checkout. This cannot be undone.`
+          : `${discount.title} will be removed from your store and will stop applying at checkout. This cannot be undone.`,
       confirmLabel: "Delete",
       critical: true,
     });
@@ -255,6 +271,7 @@ export default function DiscountsPage() {
             <s-table-header-row>
               <s-table-header listSlot="primary">Title</s-table-header>
               <s-table-header listSlot="inline">Status</s-table-header>
+              <s-table-header listSlot="labeled">Method</s-table-header>
               <s-table-header listSlot="labeled">Tiers</s-table-header>
               <s-table-header listSlot="labeled">Starts</s-table-header>
               <s-table-header listSlot="labeled">Ends</s-table-header>
@@ -275,7 +292,10 @@ export default function DiscountsPage() {
                   >
                     <s-table-cell>
                       {editable ? (
-                        <s-link id={linkId} href={`/app/discounts/${numericId}`}>
+                        <s-link
+                          id={linkId}
+                          href={discountPath(discount.method, discount.id)}
+                        >
                           {discount.title}
                         </s-link>
                       ) : (
@@ -287,6 +307,21 @@ export default function DiscountsPage() {
                       <s-badge tone={STATUS_TONES[discount.status]}>
                         {STATUS_LABELS[discount.status]}
                       </s-badge>
+                    </s-table-cell>
+
+                    <s-table-cell>
+                      {discount.method === "code" ? (
+                        <s-stack direction="block" gap="small-500">
+                          <s-text>{discount.code}</s-text>
+                          <s-text color="subdued">
+                            {discount.usageLimit === null
+                              ? `${discount.usageCount} used`
+                              : `${discount.usageCount} of ${discount.usageLimit} used`}
+                          </s-text>
+                        </s-stack>
+                      ) : (
+                        <s-text>Automatic</s-text>
+                      )}
                     </s-table-cell>
 
                     <s-table-cell>
@@ -333,7 +368,9 @@ export default function DiscountsPage() {
                             variant="tertiary"
                             {...(busy ? { disabled: true } : {})}
                             {...(rowBusy ? { loading: true } : {})}
-                            onClick={() => run("deactivate", numericId)}
+                            onClick={() =>
+                              run("deactivate", numericId, discount.method)
+                            }
                           >
                             Deactivate
                           </s-button>

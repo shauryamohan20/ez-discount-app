@@ -49,8 +49,8 @@ export default function App() {
         )}
         <ul className={styles.list}>
           <li>
-            <strong>Automatic</strong>. The discount applies in the cart on its
-            own, so customers never need a code.
+            <strong>Automatic or code</strong>. Apply the discount in the cart
+            on its own, or give customers a code to enter at checkout.
           </li>
           <li>
             <strong>Quantity based</strong>. Give a bigger percentage off as the

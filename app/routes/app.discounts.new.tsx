@@ -45,6 +45,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   try {
     const offsetMinutes = await getShopTimezoneOffsetMinutes(admin);
     const {
+      method,
+      code,
+      usageLimit,
+      appliesOncePerCustomer,
       title,
       startDate,
       endDate,
@@ -55,6 +59,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     } = validation.value;
 
     const result = await createTieredDiscount(admin, {
+      method,
+      code,
+      usageLimit,
+      appliesOncePerCustomer,
       title,
       startsAt: calendarDateToShopIso(startDate, offsetMinutes),
       endsAt: endDate
@@ -117,6 +125,10 @@ export default function NewDiscountPage() {
         startDate: values.startDate,
         endDate: values.endDate,
         combinesWithShipping: String(values.combinesWithShipping),
+        method: values.method,
+        code: values.code,
+        usageLimit: values.usageLimit,
+        appliesOncePerCustomer: String(values.appliesOncePerCustomer),
         appliesToType: values.appliesToType,
         customerEligibility: values.customerEligibility,
         products: JSON.stringify(values.products),
