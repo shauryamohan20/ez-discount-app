@@ -7,13 +7,13 @@
         "buyerIdentity": null,
         "cost": {
           "subtotalAmount": {
-            "amount": "125.00"
+            "amount": "150.00"
           }
         },
         "lines": [
           {
             "id": "gid://shopify/CartLine/0",
-            "quantity": 5,
+            "quantity": 1,
             "merchandise": {
               "__typename": "ProductVariant",
               "id": "gid://shopify/ProductVariant/100",
@@ -25,30 +25,34 @@
           }
         ]
       },
+      "presentmentCurrencyRate": "1.0",
       "discount": {
         "discountClasses": [
-          "PRODUCT"
+          "ORDER"
         ],
         "metafield": {
           "jsonValue": {
-            "version": 3,
+            "version": 5,
+            "type": "order_threshold",
             "tiers": [
               {
-                "minQuantity": 2,
-                "maxQuantity": 4,
-                "percentage": 10,
-                "maxDiscountedUnits": null
+                "minSubtotal": 0,
+                "percentage": 10
+              },
+              {
+                "minSubtotal": 100,
+                "percentage": 101
               }
             ],
             "appliesTo": {
               "type": "all",
               "productIds": [],
               "collectionIds": []
-            }
+            },
+            "customerEligibility": "all"
           }
         }
-      },
-      "presentmentCurrencyRate": "1.0"
+      }
     },
     "output": {
       "operations": []

@@ -4,21 +4,16 @@
     "target": "cart.lines.discounts.generate.run",
     "input": {
       "cart": {
-        "buyerIdentity": {
-          "isAuthenticated": true,
-          "customer": {
-            "numberOfOrders": 4
-          }
-        },
+        "buyerIdentity": null,
         "cost": {
           "subtotalAmount": {
-            "amount": "75.00"
+            "amount": "150.00"
           }
         },
         "lines": [
           {
             "id": "gid://shopify/CartLine/0",
-            "quantity": 3,
+            "quantity": 1,
             "merchandise": {
               "__typename": "ProductVariant",
               "id": "gid://shopify/ProductVariant/100",
@@ -30,25 +25,34 @@
           }
         ]
       },
+      "presentmentCurrencyRate": "1.0",
       "discount": {
         "discountClasses": [
-          "PRODUCT"
+          "ORDER"
         ],
         "metafield": {
           "jsonValue": {
-            "version": 4,
+            "version": 5,
+            "type": "order_threshold",
             "tiers": [
               {
-                "minQuantity": 2,
-                "maxQuantity": 4,
-                "percentage": 10,
-                "maxDiscountedUnits": null
+                "minSubtotal": "one hundred",
+                "percentage": 50
               },
               {
-                "minQuantity": 5,
-                "maxQuantity": null,
-                "percentage": 20,
-                "maxDiscountedUnits": null
+                "minSubtotal": 100,
+                "percentage": 10
+              },
+              {
+                "minSubtotal": 120,
+                "percentage": 0
+              },
+              {
+                "minSubtotal": -5,
+                "percentage": 99
+              },
+              {
+                "percentage": 80
               }
             ],
             "appliesTo": {
@@ -56,23 +60,22 @@
               "productIds": [],
               "collectionIds": []
             },
-            "customerEligibility": "returning"
+            "customerEligibility": "all"
           }
         }
-      },
-      "presentmentCurrencyRate": "1.0"
+      }
     },
     "output": {
       "operations": [
         {
-          "productDiscountsAdd": {
+          "orderDiscountsAdd": {
             "candidates": [
               {
-                "message": "10% OFF",
+                "message": "10% OFF YOUR ORDER",
                 "targets": [
                   {
-                    "cartLine": {
-                      "id": "gid://shopify/CartLine/0"
+                    "orderSubtotal": {
+                      "excludedCartLineIds": []
                     }
                   }
                 ],

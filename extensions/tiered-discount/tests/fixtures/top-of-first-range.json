@@ -5,6 +5,11 @@
     "input": {
       "cart": {
         "buyerIdentity": null,
+        "cost": {
+          "subtotalAmount": {
+            "amount": "100.00"
+          }
+        },
         "lines": [
           {
             "id": "gid://shopify/CartLine/0",
@@ -48,7 +53,8 @@
             }
           }
         }
-      }
+      },
+      "presentmentCurrencyRate": "1.0"
     },
     "output": {
       "operations": [

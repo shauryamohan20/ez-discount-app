@@ -6,6 +6,11 @@ query CartInput($collectionIds: [ID!] = []) {
         numberOfOrders
       }
     }
+    cost {
+      subtotalAmount {
+        amount
+      }
+    }
     lines {
       id
       quantity
@@ -21,6 +26,7 @@ query CartInput($collectionIds: [ID!] = []) {
       }
     }
   }
+  presentmentCurrencyRate
   discount {
     discountClasses
     metafield(namespace: "$app:tiered", key: "config") {

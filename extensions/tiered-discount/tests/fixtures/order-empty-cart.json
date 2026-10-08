@@ -7,41 +7,39 @@
         "buyerIdentity": null,
         "cost": {
           "subtotalAmount": {
-            "amount": "0.00"
+            "amount": "500.00"
           }
         },
         "lines": []
       },
+      "presentmentCurrencyRate": "1.0",
       "discount": {
         "discountClasses": [
-          "PRODUCT"
+          "ORDER"
         ],
         "metafield": {
           "jsonValue": {
-            "version": 3,
+            "version": 5,
+            "type": "order_threshold",
             "tiers": [
               {
-                "minQuantity": 2,
-                "maxQuantity": 4,
-                "percentage": 10,
-                "maxDiscountedUnits": null
+                "minSubtotal": 100,
+                "percentage": 10
               },
               {
-                "minQuantity": 5,
-                "maxQuantity": null,
-                "percentage": 20,
-                "maxDiscountedUnits": null
+                "minSubtotal": 200,
+                "percentage": 15
               }
             ],
             "appliesTo": {
               "type": "all",
               "productIds": [],
               "collectionIds": []
-            }
+            },
+            "customerEligibility": "all"
           }
         }
-      },
-      "presentmentCurrencyRate": "1.0"
+      }
     },
     "output": {
       "operations": []

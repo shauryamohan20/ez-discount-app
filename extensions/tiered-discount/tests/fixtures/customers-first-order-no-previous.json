@@ -10,6 +10,11 @@
             "numberOfOrders": 0
           }
         },
+        "cost": {
+          "subtotalAmount": {
+            "amount": "75.00"
+          }
+        },
         "lines": [
           {
             "id": "gid://shopify/CartLine/0",
@@ -54,7 +59,8 @@
             "customerEligibility": "firstOrder"
           }
         }
-      }
+      },
+      "presentmentCurrencyRate": "1.0"
     },
     "output": {
       "operations": [
