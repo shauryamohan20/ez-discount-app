@@ -17,10 +17,10 @@ import { authenticate } from "../shopify.server";
 import { TieredDiscountForm } from "../components/TieredDiscountForm";
 import {
   discountFormValuesFromFormData,
-  emptyTierRow,
+  emptyOrderTierRow,
   hasErrors,
   mapUserErrors,
-  tierToRow,
+  orderTierToRow,
   validateDiscountForm,
   type DiscountFormErrors,
   type DiscountFormValues,
@@ -31,12 +31,11 @@ import {
   todayInShop,
 } from "../lib/shop-time";
 import {
-  getResourceTitles,
+  getShopCurrencyCode,
   getShopTimezoneOffsetMinutes,
   getTieredDiscount,
   updateTieredDiscount,
 } from "../models/discounts.server";
-import { ALL_PRODUCTS } from "../lib/tiers";
 import { toDiscountGid } from "../lib/discount-id";
 
 export const loader = async ({ request, params }: LoaderFunctionArgs) => {
@@ -47,8 +46,9 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
     throw new Response("Not found", { status: 404 });
   }
 
-  const [offsetMinutes, discount] = await Promise.all([
+  const [offsetMinutes, currencyCode, discount] = await Promise.all([
     getShopTimezoneOffsetMinutes(admin),
+    getShopCurrencyCode(admin),
     getTieredDiscount(admin, id),
   ]);
 
@@ -58,59 +58,45 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
 
   const config = discount.config;
 
-  // A discount cannot change type, so an order threshold reached through this
-  // tab belongs on the other one rather than being edited here with the wrong
-  // fields.
-  if (config.status === "ok" && config.type === "order_threshold") {
-    throw redirect(`/app/discounts/order/${params.method}/${params.id}`);
+  // A discount cannot change type, so a quantity tier discount reached through
+  // this tab belongs on the other one rather than being edited here with the
+  // wrong fields.
+  if (config.status === "ok" && config.type !== "order_threshold") {
+    throw redirect(`/app/discounts/quantity/${params.method}/${params.id}`);
   }
 
-  const appliesTo = config.status === "ok" ? config.appliesTo : ALL_PRODUCTS;
-
-  const resourceIds =
-    appliesTo.type === "products"
-      ? appliesTo.productIds
-      : appliesTo.type === "collections"
-        ? appliesTo.collectionIds
-        : [];
-
-  const titles = await getResourceTitles(admin, resourceIds);
-  const resources = resourceIds.map((id) => ({
-    id,
-    title: titles.get(id) ?? "No longer available",
-  }));
-
-  const quantityTiers =
-    config.status === "ok" && config.type === "quantity_tiers"
+  const orderTiers =
+    config.status === "ok" && config.type === "order_threshold"
       ? config.tiers
       : [];
 
   const values: DiscountFormValues = {
-    discountType: "quantity_tiers",
-    orderTiers: [],
-    combinesWithOtherDiscounts: discount.combinesWithOtherDiscounts,
+    discountType: "order_threshold",
+    method: discount.method,
+    code: discount.code ?? "",
+    usageLimit: discount.usageLimit === null ? "" : String(discount.usageLimit),
+    appliesOncePerCustomer: discount.appliesOncePerCustomer,
     title: discount.title,
     startDate:
       shopIsoToCalendarDate(discount.startsAt, offsetMinutes) ||
       todayInShop(offsetMinutes),
     endDate: shopIsoToCalendarDate(discount.endsAt, offsetMinutes),
-    method: discount.method,
-    code: discount.code ?? "",
-    usageLimit: discount.usageLimit === null ? "" : String(discount.usageLimit),
-    appliesOncePerCustomer: discount.appliesOncePerCustomer,
     combinesWithShipping: discount.combinesWithShipping,
-    appliesToType: appliesTo.type,
-    products: appliesTo.type === "products" ? resources : [],
-    collections: appliesTo.type === "collections" ? resources : [],
+    combinesWithOtherDiscounts: discount.combinesWithOtherDiscounts,
+    appliesToType: "all",
+    products: [],
+    collections: [],
     customerEligibility:
       config.status === "ok" ? config.customerEligibility : "all",
-    tiers: quantityTiers.length
-      ? quantityTiers.map(tierToRow)
-      : [emptyTierRow()],
+    tiers: [],
+    orderTiers: orderTiers.length
+      ? orderTiers.map(orderTierToRow)
+      : [emptyOrderTierRow()],
   };
 
   return {
     values,
+    currencyCode,
     usageCount: discount.usageCount,
     unsupportedReason: config.status === "ok" ? null : config.reason,
   };
@@ -136,8 +122,6 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
     const offsetMinutes = await getShopTimezoneOffsetMinutes(admin);
     const {
       discountType,
-      orderTiers,
-      combinesWithOtherDiscounts,
       method,
       code,
       usageLimit,
@@ -146,15 +130,15 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
       startDate,
       endDate,
       combinesWithShipping,
+      combinesWithOtherDiscounts,
       appliesTo,
       customerEligibility,
       tiers,
+      orderTiers,
     } = validation.value;
 
     const result = await updateTieredDiscount(admin, id, {
       discountType,
-      orderTiers,
-      combinesWithOtherDiscounts,
       method,
       code,
       usageLimit,
@@ -165,9 +149,11 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
         ? calendarDateToShopIso(endDate, offsetMinutes, true)
         : null,
       combinesWithShipping,
+      combinesWithOtherDiscounts,
       appliesTo,
       customerEligibility,
       tiers,
+      orderTiers,
     });
 
     if (!result.ok) {
@@ -179,7 +165,7 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
       };
     }
 
-    return redirect("/app/discounts/quantity?toast=updated");
+    return redirect("/app/discounts/order?toast=updated");
   } catch (error) {
     return {
       errors: {} as DiscountFormErrors,
@@ -191,9 +177,13 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
   }
 };
 
-export default function EditDiscountPage() {
-  const { values: loadedValues, usageCount, unsupportedReason } =
-    useLoaderData<typeof loader>();
+export default function EditOrderDiscountPage() {
+  const {
+    values: loadedValues,
+    currencyCode,
+    usageCount,
+    unsupportedReason,
+  } = useLoaderData<typeof loader>();
   const fetcher = useFetcher<typeof action>();
 
   const [values, setValues] = useState<DiscountFormValues>(loadedValues);
@@ -216,31 +206,31 @@ export default function EditDiscountPage() {
     setClientErrors({});
     fetcher.submit(
       {
-        title: values.title,
-        startDate: values.startDate,
-        endDate: values.endDate,
-        combinesWithShipping: String(values.combinesWithShipping),
         discountType: values.discountType,
         method: values.method,
         code: values.code,
         usageLimit: values.usageLimit,
         appliesOncePerCustomer: String(values.appliesOncePerCustomer),
+        title: values.title,
+        startDate: values.startDate,
+        endDate: values.endDate,
+        combinesWithShipping: String(values.combinesWithShipping),
+        combinesWithOtherDiscounts: String(values.combinesWithOtherDiscounts),
         appliesToType: values.appliesToType,
         customerEligibility: values.customerEligibility,
         products: JSON.stringify(values.products),
         collections: JSON.stringify(values.collections),
         tiers: JSON.stringify(values.tiers),
         orderTiers: JSON.stringify(values.orderTiers),
-        combinesWithOtherDiscounts: String(values.combinesWithOtherDiscounts),
       },
       { method: "POST" },
     );
   };
 
   return (
-    <s-page heading="Edit quantity based discount">
-      <s-link slot="breadcrumb-actions" href="/app/discounts/quantity">
-        Quantity based discounts
+    <s-page heading="Edit whole order discount">
+      <s-link slot="breadcrumb-actions" href="/app/discounts/order">
+        Whole order discounts
       </s-link>
 
       <s-button
@@ -252,7 +242,7 @@ export default function EditDiscountPage() {
         Save
       </s-button>
 
-      <s-button slot="secondary-actions" href="/app/discounts/quantity">
+      <s-button slot="secondary-actions" href="/app/discounts/order">
         Cancel
       </s-button>
 
@@ -263,8 +253,18 @@ export default function EditDiscountPage() {
           heading="These settings were not written by this version of the app"
         >
           <s-paragraph>
-            {unsupportedReason} Saving replaces the settings on this discount with the
-            tiers below.
+            {unsupportedReason} Saving replaces the settings on this discount
+            with the thresholds below.
+          </s-paragraph>
+        </s-banner>
+      )}
+
+      {values.method === "code" && usageCount > 0 && (
+        <s-banner slot="supplemental-start" tone="info">
+          <s-paragraph>
+            This code has been used {usageCount}{" "}
+            {usageCount === 1 ? "time" : "times"}. Shopify updates that count
+            asynchronously, so it can lag a little behind.
           </s-paragraph>
         </s-banner>
       )}
@@ -279,20 +279,11 @@ export default function EditDiscountPage() {
         </s-banner>
       )}
 
-      {values.method === "code" && usageCount > 0 && (
-        <s-banner slot="supplemental-start" tone="info">
-          <s-paragraph>
-            This code has been used {usageCount}{" "}
-            {usageCount === 1 ? "time" : "times"}. Shopify updates that count
-            asynchronously, so it can lag a little behind.
-          </s-paragraph>
-        </s-banner>
-      )}
-
       <TieredDiscountForm
         values={values}
         errors={errors}
         disabled={saving}
+        currencyCode={currencyCode}
         methodLocked
         onChange={setValues}
       />
@@ -303,14 +294,11 @@ export default function EditDiscountPage() {
 export function ErrorBoundary() {
   const error = useRouteError();
 
-  // A deleted discount, or an ID that belongs to something else, should read
-  // as a dead end rather than as a crash. Everything else, including the
-  // responses Shopify throws during authentication, goes to their boundary.
   if (isRouteErrorResponse(error) && error.status === 404) {
     return (
       <s-page heading="Discount not found">
-        <s-link slot="breadcrumb-actions" href="/app/discounts/quantity">
-          Quantity based discounts
+        <s-link slot="breadcrumb-actions" href="/app/discounts/order">
+          Whole order discounts
         </s-link>
 
         <s-section>
@@ -319,8 +307,8 @@ export function ErrorBoundary() {
               This discount no longer exists, or it was not created by this app.
             </s-paragraph>
             <s-stack direction="inline">
-              <s-button variant="primary" href="/app/discounts/quantity">
-                Back to discounts
+              <s-button variant="primary" href="/app/discounts/order">
+                Back to whole order discounts
               </s-button>
             </s-stack>
           </s-stack>

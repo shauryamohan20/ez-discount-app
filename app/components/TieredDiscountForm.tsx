@@ -160,8 +160,8 @@ export function TieredDiscountForm({
 
           {methodLocked && (
             <s-text color="subdued">
-              The method cannot be changed after a discount is created. Create a
-              new discount to switch.
+              Neither the method nor the kind of discount can be changed after
+              it is created. Create a new discount to switch.
             </s-text>
           )}
 
