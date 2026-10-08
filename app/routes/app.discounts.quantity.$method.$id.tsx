@@ -72,7 +72,15 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
     title: titles.get(id) ?? "No longer available",
   }));
 
+  const quantityTiers =
+    config.status === "ok" && config.type === "quantity_tiers"
+      ? config.tiers
+      : [];
+
   const values: DiscountFormValues = {
+    discountType: "quantity_tiers",
+    orderTiers: [],
+    combinesWithOtherDiscounts: discount.combinesWithOtherDiscounts,
     title: discount.title,
     startDate:
       shopIsoToCalendarDate(discount.startsAt, offsetMinutes) ||
@@ -88,8 +96,9 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
     collections: appliesTo.type === "collections" ? resources : [],
     customerEligibility:
       config.status === "ok" ? config.customerEligibility : "all",
-    tiers:
-      config.status === "ok" ? config.tiers.map(tierToRow) : [emptyTierRow()],
+    tiers: quantityTiers.length
+      ? quantityTiers.map(tierToRow)
+      : [emptyTierRow()],
   };
 
   return {
@@ -118,6 +127,9 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
   try {
     const offsetMinutes = await getShopTimezoneOffsetMinutes(admin);
     const {
+      discountType,
+      orderTiers,
+      combinesWithOtherDiscounts,
       method,
       code,
       usageLimit,
@@ -132,6 +144,9 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
     } = validation.value;
 
     const result = await updateTieredDiscount(admin, id, {
+      discountType,
+      orderTiers,
+      combinesWithOtherDiscounts,
       method,
       code,
       usageLimit,
@@ -156,7 +171,7 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
       };
     }
 
-    return redirect("/app/discounts?toast=updated");
+    return redirect("/app/discounts/quantity?toast=updated");
   } catch (error) {
     return {
       errors: {} as DiscountFormErrors,
@@ -197,6 +212,7 @@ export default function EditDiscountPage() {
         startDate: values.startDate,
         endDate: values.endDate,
         combinesWithShipping: String(values.combinesWithShipping),
+        discountType: values.discountType,
         method: values.method,
         code: values.code,
         usageLimit: values.usageLimit,
@@ -206,6 +222,8 @@ export default function EditDiscountPage() {
         products: JSON.stringify(values.products),
         collections: JSON.stringify(values.collections),
         tiers: JSON.stringify(values.tiers),
+        orderTiers: JSON.stringify(values.orderTiers),
+        combinesWithOtherDiscounts: String(values.combinesWithOtherDiscounts),
       },
       { method: "POST" },
     );
@@ -213,8 +231,8 @@ export default function EditDiscountPage() {
 
   return (
     <s-page heading="Edit quantity based discount">
-      <s-link slot="breadcrumb-actions" href="/app/discounts">
-        Discounts
+      <s-link slot="breadcrumb-actions" href="/app/discounts/quantity">
+        Quantity based discounts
       </s-link>
 
       <s-button
@@ -226,7 +244,7 @@ export default function EditDiscountPage() {
         Save
       </s-button>
 
-      <s-button slot="secondary-actions" href="/app/discounts">
+      <s-button slot="secondary-actions" href="/app/discounts/quantity">
         Cancel
       </s-button>
 
@@ -283,8 +301,8 @@ export function ErrorBoundary() {
   if (isRouteErrorResponse(error) && error.status === 404) {
     return (
       <s-page heading="Discount not found">
-        <s-link slot="breadcrumb-actions" href="/app/discounts">
-          Discounts
+        <s-link slot="breadcrumb-actions" href="/app/discounts/quantity">
+          Quantity based discounts
         </s-link>
 
         <s-section>
@@ -293,7 +311,7 @@ export function ErrorBoundary() {
               This discount no longer exists, or it was not created by this app.
             </s-paragraph>
             <s-stack direction="inline">
-              <s-button variant="primary" href="/app/discounts">
+              <s-button variant="primary" href="/app/discounts/quantity">
                 Back to discounts
               </s-button>
             </s-stack>

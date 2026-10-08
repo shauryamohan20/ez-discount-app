@@ -32,7 +32,7 @@ export default function HomePage() {
       <s-button
         slot="primary-action"
         variant="primary"
-        href="/app/discounts/new"
+        href="/app/discounts/quantity/new"
       >
         Create discount
       </s-button>
@@ -47,19 +47,19 @@ export default function HomePage() {
 
           {loadFailed ? (
             <s-paragraph>
-              <s-link href="/app/discounts">View your discounts</s-link>
+              <s-link href="/app/discounts/quantity">View your discounts</s-link>
             </s-paragraph>
           ) : total === 0 ? (
             <s-paragraph>
               You have not created a discount yet.{" "}
-              <s-link href="/app/discounts/new">Create your first one</s-link>.
+              <s-link href="/app/discounts/quantity/new">Create your first one</s-link>.
             </s-paragraph>
           ) : (
             <s-paragraph>
               You have {total} quantity based{" "}
               {total === 1 ? "discount" : "discounts"},{" "}
               {active} of them active.{" "}
-              <s-link href="/app/discounts">Manage discounts</s-link>.
+              <s-link href="/app/discounts/quantity">Manage discounts</s-link>.
             </s-paragraph>
           )}
         </s-stack>

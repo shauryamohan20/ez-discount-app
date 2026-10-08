@@ -4,9 +4,11 @@ import { isDiscountMethod } from "../lib/discount-id";
 import {
   MAX_CODE_LENGTH,
   MAX_TITLE_LENGTH,
+  emptyOrderTierRow,
   emptyTierRow,
   type DiscountFormErrors,
   type DiscountFormValues,
+  type OrderTierRowValues,
   type ResourceRef,
   type TierRowValues,
 } from "../lib/discount-form";
@@ -21,6 +23,8 @@ type Props = {
   values: DiscountFormValues;
   errors: DiscountFormErrors;
   disabled?: boolean;
+  /** The shop's currency code, shown beside order threshold amounts. */
+  currencyCode?: string;
   /** True on edit: a discount cannot change between automatic and code. */
   methodLocked?: boolean;
   onChange: (values: DiscountFormValues) => void;
@@ -30,9 +34,11 @@ export function TieredDiscountForm({
   values,
   errors,
   disabled = false,
+  currencyCode = "",
   methodLocked = false,
   onChange,
 }: Props) {
+  const isOrderThreshold = values.discountType === "order_threshold";
   const shopify = useAppBridge();
 
   const update = (patch: Partial<DiscountFormValues>) => {
@@ -93,7 +99,31 @@ export function TieredDiscountForm({
     update({ tiers: values.tiers.filter((_, position) => position !== index) });
   };
 
+  const updateOrderTier = (
+    index: number,
+    patch: Partial<OrderTierRowValues>,
+  ) => {
+    update({
+      orderTiers: values.orderTiers.map((tier, position) =>
+        position === index ? { ...tier, ...patch } : tier,
+      ),
+    });
+  };
+
+  const addOrderTier = () => {
+    update({ orderTiers: [...values.orderTiers, emptyOrderTierRow()] });
+  };
+
+  const removeOrderTier = (index: number) => {
+    update({
+      orderTiers: values.orderTiers.filter(
+        (_, position) => position !== index,
+      ),
+    });
+  };
+
   const rowErrors = errors.rows ?? {};
+  const orderRowErrors = errors.orderRows ?? {};
 
   return (
     <>
@@ -225,6 +255,20 @@ export function TieredDiscountForm({
           </s-stack>
 
           <s-checkbox
+            label={
+              isOrderThreshold
+                ? "Let this discount combine with product discounts"
+                : "Let this discount combine with whole order discounts"
+            }
+            name="combinesWithOtherDiscounts"
+            checked={values.combinesWithOtherDiscounts}
+            {...(disabled ? { disabled: true } : {})}
+            onChange={(event) =>
+              update({ combinesWithOtherDiscounts: event.currentTarget.checked })
+            }
+          />
+
+          <s-checkbox
             label="Let this discount combine with shipping discounts"
             name="combinesWithShipping"
             checked={values.combinesWithShipping}
@@ -236,6 +280,7 @@ export function TieredDiscountForm({
         </s-stack>
       </s-section>
 
+      {!isOrderThreshold && (
       <s-section heading="Applies to">
         <s-stack direction="block" gap="base">
           <s-choice-list
@@ -317,6 +362,7 @@ export function TieredDiscountForm({
           )}
         </s-stack>
       </s-section>
+      )}
 
       <s-section heading="Eligible customers">
         <s-stack direction="block" gap="base">
@@ -359,13 +405,14 @@ export function TieredDiscountForm({
         </s-stack>
       </s-section>
 
-      <s-section heading="Tiers">
+      <s-section heading={isOrderThreshold ? "Thresholds" : "Tiers"}>
         <s-stack direction="block" gap="base">
           <s-paragraph>
-            Each tier covers a range of quantities, counting only the items
-            this discount applies to. Leave the to quantity
-            empty for no upper limit, or set it to the same number as the from
-            quantity to match an exact quantity. Ranges cannot overlap.
+            {isOrderThreshold
+              ? `Each threshold is a cart subtotal. The highest one the order reaches decides the percentage off. Amounts are in ${
+                  currencyCode || "your store's currency"
+                }.`
+              : "Each tier covers a range of quantities, counting only the items this discount applies to. Leave the to quantity empty for no upper limit, or set it to the same number as the from quantity to match an exact quantity. Ranges cannot overlap."}
           </s-paragraph>
 
           {errors.tiers && (
@@ -374,7 +421,73 @@ export function TieredDiscountForm({
             </s-banner>
           )}
 
-          {values.tiers.map((tier, index) => {
+          {isOrderThreshold &&
+            values.orderTiers.map((tier, index) => {
+              const tierErrors = orderRowErrors[String(index)] ?? {};
+
+              return (
+                <s-box
+                  key={index}
+                  padding="base"
+                  borderWidth="base"
+                  borderRadius="base"
+                >
+                  <s-stack
+                    direction="inline"
+                    gap="base"
+                    alignItems="start"
+                    justifyContent="space-between"
+                  >
+                    <s-number-field
+                      label="Spend at least"
+                      value={tier.minSubtotal}
+                      min={0}
+                      step={1}
+                      {...(currencyCode ? { suffix: currencyCode } : {})}
+                      {...(tierErrors.minSubtotal
+                        ? { error: tierErrors.minSubtotal }
+                        : {})}
+                      {...(disabled ? { disabled: true } : {})}
+                      onInput={(event) =>
+                        updateOrderTier(index, {
+                          minSubtotal: event.currentTarget.value,
+                        })
+                      }
+                    />
+                    <s-number-field
+                      label="Percentage off"
+                      value={tier.percentage}
+                      min={0}
+                      max={100}
+                      suffix="%"
+                      {...(tierErrors.percentage
+                        ? { error: tierErrors.percentage }
+                        : {})}
+                      {...(disabled ? { disabled: true } : {})}
+                      onInput={(event) =>
+                        updateOrderTier(index, {
+                          percentage: event.currentTarget.value,
+                        })
+                      }
+                    />
+                    <s-button
+                      variant="tertiary"
+                      tone="critical"
+                      accessibilityLabel={`Remove threshold ${index + 1}`}
+                      {...(disabled || values.orderTiers.length === 1
+                        ? { disabled: true }
+                        : {})}
+                      onClick={() => removeOrderTier(index)}
+                    >
+                      Remove
+                    </s-button>
+                  </s-stack>
+                </s-box>
+              );
+            })}
+
+          {!isOrderThreshold &&
+            values.tiers.map((tier, index) => {
             const tierErrors = rowErrors[String(index)] ?? {};
 
             return (
@@ -481,12 +594,14 @@ export function TieredDiscountForm({
           <s-stack direction="inline">
             <s-button
               variant="secondary"
-              {...(disabled || values.tiers.length >= MAX_TIERS
+              {...(disabled ||
+              (isOrderThreshold ? values.orderTiers.length : values.tiers.length) >=
+                MAX_TIERS
                 ? { disabled: true }
                 : {})}
-              onClick={addTier}
+              onClick={isOrderThreshold ? addOrderTier : addTier}
             >
-              Add tier
+              {isOrderThreshold ? "Add threshold" : "Add tier"}
             </s-button>
           </s-stack>
         </s-stack>

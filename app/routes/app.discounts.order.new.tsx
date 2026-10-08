@@ -4,7 +4,12 @@ import type {
   HeadersFunction,
   LoaderFunctionArgs,
 } from "react-router";
-import { redirect, useFetcher, useLoaderData, useRouteError } from "react-router";
+import {
+  redirect,
+  useFetcher,
+  useLoaderData,
+  useRouteError,
+} from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 
 import { authenticate } from "../shopify.server";
@@ -21,14 +26,19 @@ import {
 import { calendarDateToShopIso, todayInShop } from "../lib/shop-time";
 import {
   createTieredDiscount,
+  getShopCurrencyCode,
   getShopTimezoneOffsetMinutes,
 } from "../models/discounts.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin } = await authenticate.admin(request);
-  const offsetMinutes = await getShopTimezoneOffsetMinutes(admin);
 
-  return { today: todayInShop(offsetMinutes) };
+  const [offsetMinutes, currencyCode] = await Promise.all([
+    getShopTimezoneOffsetMinutes(admin),
+    getShopCurrencyCode(admin),
+  ]);
+
+  return { today: todayInShop(offsetMinutes), currencyCode };
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
@@ -45,6 +55,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   try {
     const offsetMinutes = await getShopTimezoneOffsetMinutes(admin);
     const {
+      discountType,
       method,
       code,
       usageLimit,
@@ -53,12 +64,15 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       startDate,
       endDate,
       combinesWithShipping,
+      combinesWithOtherDiscounts,
       appliesTo,
       customerEligibility,
       tiers,
+      orderTiers,
     } = validation.value;
 
     const result = await createTieredDiscount(admin, {
+      discountType,
       method,
       code,
       usageLimit,
@@ -69,9 +83,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         ? calendarDateToShopIso(endDate, offsetMinutes, true)
         : null,
       combinesWithShipping,
+      combinesWithOtherDiscounts,
       appliesTo,
       customerEligibility,
       tiers,
+      orderTiers,
     });
 
     if (!result.ok) {
@@ -83,7 +99,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       };
     }
 
-    return redirect("/app/discounts?toast=created");
+    return redirect("/app/discounts/order?toast=created");
   } catch (error) {
     return {
       errors: {} as DiscountFormErrors,
@@ -95,12 +111,12 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   }
 };
 
-export default function NewDiscountPage() {
-  const { today } = useLoaderData<typeof loader>();
+export default function NewOrderDiscountPage() {
+  const { today, currencyCode } = useLoaderData<typeof loader>();
   const fetcher = useFetcher<typeof action>();
 
   const [values, setValues] = useState<DiscountFormValues>(() =>
-    blankDiscountForm(today),
+    blankDiscountForm(today, "automatic", "order_threshold"),
   );
   const [clientErrors, setClientErrors] = useState<DiscountFormErrors>({});
 
@@ -121,28 +137,31 @@ export default function NewDiscountPage() {
     setClientErrors({});
     fetcher.submit(
       {
-        title: values.title,
-        startDate: values.startDate,
-        endDate: values.endDate,
-        combinesWithShipping: String(values.combinesWithShipping),
+        discountType: values.discountType,
         method: values.method,
         code: values.code,
         usageLimit: values.usageLimit,
         appliesOncePerCustomer: String(values.appliesOncePerCustomer),
+        title: values.title,
+        startDate: values.startDate,
+        endDate: values.endDate,
+        combinesWithShipping: String(values.combinesWithShipping),
+        combinesWithOtherDiscounts: String(values.combinesWithOtherDiscounts),
         appliesToType: values.appliesToType,
         customerEligibility: values.customerEligibility,
         products: JSON.stringify(values.products),
         collections: JSON.stringify(values.collections),
         tiers: JSON.stringify(values.tiers),
+        orderTiers: JSON.stringify(values.orderTiers),
       },
       { method: "POST" },
     );
   };
 
   return (
-    <s-page heading="Create quantity based discount">
-      <s-link slot="breadcrumb-actions" href="/app/discounts">
-        Discounts
+    <s-page heading="Create whole order discount">
+      <s-link slot="breadcrumb-actions" href="/app/discounts/order">
+        Whole order discounts
       </s-link>
 
       <s-button
@@ -154,7 +173,7 @@ export default function NewDiscountPage() {
         Save
       </s-button>
 
-      <s-button slot="secondary-actions" href="/app/discounts">
+      <s-button slot="secondary-actions" href="/app/discounts/order">
         Cancel
       </s-button>
 
@@ -172,6 +191,7 @@ export default function NewDiscountPage() {
         values={values}
         errors={errors}
         disabled={saving}
+        currencyCode={currencyCode}
         onChange={setValues}
       />
     </s-page>

@@ -1,12 +1,17 @@
 import type { DiscountMethod } from "./discount-id";
 import { isCalendarDate } from "./shop-time";
 import {
+  ALL_PRODUCTS,
   MAX_TIERS,
   isCustomerEligibility,
+  sortOrderTiers,
   sortTiers,
+  isDiscountType,
   type AppliesTo,
   type AppliesToType,
   type CustomerEligibility,
+  type DiscountType,
+  type OrderTier,
   type Tier,
 } from "./tiers";
 
@@ -21,6 +26,17 @@ export type ResourceRef = {
 };
 
 /** Form state is kept as strings so half typed numbers stay on screen. */
+/** Order threshold rows are kept as strings for the same reason. */
+export type OrderTierRowValues = {
+  minSubtotal: string;
+  percentage: string;
+};
+
+export type OrderTierRowErrors = {
+  minSubtotal?: string;
+  percentage?: string;
+};
+
 export type TierRowValues = {
   minQuantity: string;
   maxQuantity: string;
@@ -29,6 +45,8 @@ export type TierRowValues = {
 };
 
 export type DiscountFormValues = {
+  /** Chosen at creation and fixed afterwards: the classes differ per type. */
+  discountType: DiscountType;
   /** Chosen at creation and fixed afterwards: the two are different resources. */
   method: DiscountMethod;
   code: string;
@@ -38,11 +56,18 @@ export type DiscountFormValues = {
   startDate: string;
   endDate: string;
   combinesWithShipping: boolean;
+  /**
+   * Whether this discount may apply alongside the other discount class: order
+   * discounts for a quantity tier discount, product discounts for an order
+   * threshold. Same class combining is always off.
+   */
+  combinesWithOtherDiscounts: boolean;
   appliesToType: AppliesToType;
   products: ResourceRef[];
   collections: ResourceRef[];
   customerEligibility: CustomerEligibility;
   tiers: TierRowValues[];
+  orderTiers: OrderTierRowValues[];
 };
 
 export type TierRowErrors = {
@@ -61,9 +86,11 @@ export type DiscountFormErrors = {
   appliesTo?: string;
   tiers?: string;
   rows?: Record<string, TierRowErrors>;
+  orderRows?: Record<string, OrderTierRowErrors>;
 };
 
 export type ValidatedDiscount = {
+  discountType: DiscountType;
   method: DiscountMethod;
   code: string | null;
   usageLimit: number | null;
@@ -72,9 +99,12 @@ export type ValidatedDiscount = {
   startDate: string;
   endDate: string | null;
   combinesWithShipping: boolean;
+  combinesWithOtherDiscounts: boolean;
   appliesTo: AppliesTo;
   customerEligibility: CustomerEligibility;
+  /** Only the list matching discountType is populated. */
   tiers: Tier[];
+  orderTiers: OrderTier[];
 };
 
 export type ValidationResult =
@@ -83,6 +113,17 @@ export type ValidationResult =
 
 export const MAX_TITLE_LENGTH = 255;
 export const MAX_CODE_LENGTH = 255;
+
+export function emptyOrderTierRow(): OrderTierRowValues {
+  return { minSubtotal: "", percentage: "" };
+}
+
+export function orderTierToRow(tier: OrderTier): OrderTierRowValues {
+  return {
+    minSubtotal: String(tier.minSubtotal),
+    percentage: String(tier.percentage),
+  };
+}
 
 export function emptyTierRow(): TierRowValues {
   return {
@@ -106,8 +147,10 @@ export function tierToRow(tier: Tier): TierRowValues {
 export function blankDiscountForm(
   startDate: string,
   method: DiscountMethod = "automatic",
+  discountType: DiscountType = "quantity_tiers",
 ): DiscountFormValues {
   return {
+    discountType,
     method,
     code: "",
     usageLimit: "",
@@ -116,6 +159,7 @@ export function blankDiscountForm(
     startDate,
     endDate: "",
     combinesWithShipping: true,
+    combinesWithOtherDiscounts: false,
     appliesToType: "all",
     products: [],
     collections: [],
@@ -128,6 +172,7 @@ export function blankDiscountForm(
         maxDiscountedUnits: "",
       },
     ],
+    orderTiers: [{ minSubtotal: "100", percentage: "10" }],
   };
 }
 
@@ -144,13 +189,19 @@ export function hasErrors(errors: DiscountFormErrors): boolean {
     return true;
   }
 
-  return Object.values(errors.rows ?? {}).some(
+  const quantityRows = Object.values(errors.rows ?? {}).some(
     (row) =>
       row.minQuantity ||
       row.maxQuantity ||
       row.percentage ||
       row.maxDiscountedUnits,
   );
+
+  const orderRows = Object.values(errors.orderRows ?? {}).some(
+    (row) => row.minSubtotal || row.percentage,
+  );
+
+  return quantityRows || orderRows;
 }
 
 function parseNumber(raw: string): number | null {
@@ -217,7 +268,15 @@ export function validateDiscountForm(
     errors.endDate = "The end date must be after the start date.";
   }
 
-  if (values.appliesToType === "products" && values.products.length === 0) {
+  const isOrderThreshold = values.discountType === "order_threshold";
+
+  if (isOrderThreshold) {
+    // An order threshold discounts the whole order, so there is nothing to
+    // scope to a product in this version.
+  } else if (
+    values.appliesToType === "products" &&
+    values.products.length === 0
+  ) {
     errors.appliesTo = "Choose at least one product.";
   } else if (
     values.appliesToType === "collections" &&
@@ -226,10 +285,86 @@ export function validateDiscountForm(
     errors.appliesTo = "Choose at least one collection.";
   }
 
-  if (values.tiers.length === 0) {
+  const rowCount = isOrderThreshold
+    ? values.orderTiers.length
+    : values.tiers.length;
+
+  if (rowCount === 0) {
     errors.tiers = "Add at least one tier.";
-  } else if (values.tiers.length > MAX_TIERS) {
+  } else if (rowCount > MAX_TIERS) {
     errors.tiers = `Use no more than ${MAX_TIERS} tiers.`;
+  }
+
+  const orderRows: Record<string, OrderTierRowErrors> = {};
+  const parsedOrderTiers: { index: number; tier: OrderTier }[] = [];
+
+  if (isOrderThreshold) {
+    const seenThresholds = new Set<number>();
+
+    values.orderTiers.forEach((row, index) => {
+      const rowErrors: OrderTierRowErrors = {};
+
+      const minSubtotal = parseNumber(row.minSubtotal);
+      if (minSubtotal === null) {
+        rowErrors.minSubtotal = "Enter an amount.";
+      } else if (minSubtotal <= 0) {
+        rowErrors.minSubtotal = "Use more than 0.";
+      } else if (Number(minSubtotal.toFixed(2)) !== minSubtotal) {
+        rowErrors.minSubtotal = "Use at most 2 decimal places.";
+      } else if (seenThresholds.has(minSubtotal)) {
+        rowErrors.minSubtotal = "Each tier needs a different amount.";
+      } else {
+        seenThresholds.add(minSubtotal);
+      }
+
+      const percentage = parseNumber(row.percentage);
+      if (percentage === null) {
+        rowErrors.percentage = "Enter a percentage.";
+      } else if (percentage <= 0) {
+        rowErrors.percentage = "Use more than 0.";
+      } else if (percentage > 100) {
+        rowErrors.percentage = "Use 100 or less.";
+      }
+
+      if (rowErrors.minSubtotal || rowErrors.percentage) {
+        orderRows[String(index)] = rowErrors;
+        return;
+      }
+
+      parsedOrderTiers.push({
+        index,
+        tier: { minSubtotal: minSubtotal!, percentage: percentage! },
+      });
+    });
+
+    if (Object.keys(orderRows).length > 0) {
+      errors.orderRows = orderRows;
+    }
+
+    if (hasErrors(errors)) {
+      return { ok: false, errors };
+    }
+
+    return {
+      ok: true,
+      value: {
+        discountType: values.discountType,
+        method: values.method,
+        code: values.method === "code" ? code : null,
+        usageLimit: values.method === "code" ? usageLimit : null,
+        appliesOncePerCustomer:
+          values.method === "code" ? values.appliesOncePerCustomer : false,
+        title,
+        startDate,
+        endDate: endDate || null,
+        combinesWithShipping: values.combinesWithShipping,
+        combinesWithOtherDiscounts: values.combinesWithOtherDiscounts,
+        appliesTo: ALL_PRODUCTS,
+        customerEligibility: values.customerEligibility,
+        tiers: [],
+        orderTiers: sortOrderTiers(parsedOrderTiers.map((row) => row.tier)),
+      },
+    };
   }
 
   const parsed: ParsedRow[] = [];
@@ -336,6 +471,7 @@ export function validateDiscountForm(
   return {
     ok: true,
     value: {
+      discountType: values.discountType,
       method: values.method,
       code: values.method === "code" ? code : null,
       usageLimit: values.method === "code" ? usageLimit : null,
@@ -345,6 +481,7 @@ export function validateDiscountForm(
       startDate,
       endDate: endDate || null,
       combinesWithShipping: values.combinesWithShipping,
+      combinesWithOtherDiscounts: values.combinesWithOtherDiscounts,
       appliesTo: {
         type: values.appliesToType,
         productIds:
@@ -358,6 +495,7 @@ export function validateDiscountForm(
       },
       customerEligibility: values.customerEligibility,
       tiers: sortTiers(parsed.map((row) => row.tier)),
+      orderTiers: [],
     },
   };
 }
@@ -386,8 +524,12 @@ export function discountFormValuesFromFormData(
   const appliesToType = String(formData.get("appliesToType") ?? "all");
   const customerEligibility = formData.get("customerEligibility");
   const method = formData.get("method");
+  const discountType = formData.get("discountType");
 
   return {
+    discountType: isDiscountType(discountType)
+      ? discountType
+      : "quantity_tiers",
     method: method === "code" ? "code" : "automatic",
     code: String(formData.get("code") ?? ""),
     usageLimit: String(formData.get("usageLimit") ?? ""),
@@ -396,6 +538,8 @@ export function discountFormValuesFromFormData(
     startDate: String(formData.get("startDate") ?? ""),
     endDate: String(formData.get("endDate") ?? ""),
     combinesWithShipping: formData.get("combinesWithShipping") === "true",
+    combinesWithOtherDiscounts:
+      formData.get("combinesWithOtherDiscounts") === "true",
     appliesToType:
       appliesToType === "products" || appliesToType === "collections"
         ? appliesToType
@@ -406,7 +550,23 @@ export function discountFormValuesFromFormData(
       ? customerEligibility
       : "all",
     tiers,
+    orderTiers: orderTierRowsFromFormData(formData),
   };
+}
+
+function orderTierRowsFromFormData(formData: FormData): OrderTierRowValues[] {
+  try {
+    const parsed = JSON.parse(String(formData.get("orderTiers") ?? "[]"));
+
+    if (!Array.isArray(parsed)) return [];
+
+    return parsed.map((row) => ({
+      minSubtotal: String(row?.minSubtotal ?? ""),
+      percentage: String(row?.percentage ?? ""),
+    }));
+  } catch {
+    return [];
+  }
 }
 
 function resourceRefsFromFormData(

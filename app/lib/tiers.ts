@@ -29,6 +29,7 @@ export const DISCOUNT_FUNCTION_HANDLE = "tiered-discount";
  * 2: tiers gain maxQuantity and maxDiscountedUnits, both nullable.
  * 3: adds appliesTo, which defaults to every product.
  * 4: adds customerEligibility, which defaults to every customer.
+ * 5: adds type, which defaults to quantity tiers.
  *
  * Each added field is optional, so a config written by an earlier version
  * keeps the behaviour it had then and is rewritten at the current version the
@@ -36,7 +37,7 @@ export const DISCOUNT_FUNCTION_HANDLE = "tiered-discount";
  * Discounts saved by a newer version are reported as unsupported rather than
  * edited with the wrong assumptions.
  */
-export const TIER_CONFIG_VERSION = 4;
+export const TIER_CONFIG_VERSION = 5;
 
 export const MAX_TIERS = 10;
 
@@ -91,14 +92,43 @@ export function isCustomerEligibility(
   );
 }
 
+/**
+ * Which kind of discount a config describes. A config with no type at all
+ * predates order thresholds, and every one of those is a quantity tier
+ * discount, so that is what a missing type means.
+ */
+export type DiscountType = "quantity_tiers" | "order_threshold";
+
+export const DISCOUNT_TYPE_LABELS: Record<DiscountType, string> = {
+  quantity_tiers: "Quantity tiers",
+  order_threshold: "Order threshold",
+};
+
+export function isDiscountType(value: unknown): value is DiscountType {
+  return value === "quantity_tiers" || value === "order_threshold";
+}
+
+/** A percentage off the whole order once the subtotal reaches minSubtotal. */
+export type OrderTier = {
+  /** In the shop's currency, to at most two decimal places. */
+  minSubtotal: number;
+  percentage: number;
+};
+
+type ConfigCommon = {
+  status: "ok";
+  version: number;
+  appliesTo: AppliesTo;
+  customerEligibility: CustomerEligibility;
+};
+
+/**
+ * `tiers` is the same key in the metafield for both kinds, discriminated by
+ * `type`, so nothing has to migrate when a discount type is added.
+ */
 export type TierConfig =
-  | {
-      status: "ok";
-      version: number;
-      tiers: Tier[];
-      appliesTo: AppliesTo;
-      customerEligibility: CustomerEligibility;
-    }
+  | (ConfigCommon & { type: "quantity_tiers"; tiers: Tier[] })
+  | (ConfigCommon & { type: "order_threshold"; tiers: OrderTier[] })
   | { status: "unsupported"; reason: string };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -121,6 +151,37 @@ function optionalInteger(
   }
 
   return { ok: false };
+}
+
+function normalizeOrderTier(value: unknown): OrderTier | null {
+  if (!isRecord(value)) return null;
+
+  const { minSubtotal, percentage } = value;
+
+  if (
+    typeof minSubtotal !== "number" ||
+    !Number.isFinite(minSubtotal) ||
+    minSubtotal <= 0 ||
+    // More than two decimal places is not a real amount of money.
+    Number(minSubtotal.toFixed(2)) !== minSubtotal
+  ) {
+    return null;
+  }
+
+  if (
+    typeof percentage !== "number" ||
+    !Number.isFinite(percentage) ||
+    percentage <= 0 ||
+    percentage > 100
+  ) {
+    return null;
+  }
+
+  return { minSubtotal, percentage };
+}
+
+export function sortOrderTiers(tiers: OrderTier[]): OrderTier[] {
+  return [...tiers].sort((a, b) => a.minSubtotal - b.minSubtotal);
 }
 
 function normalizeTier(value: unknown): Tier | null {
@@ -220,19 +281,35 @@ export function parseTierConfig(jsonValue: unknown): TierConfig {
     };
   }
 
+  const rawType = jsonValue.type;
+  const type = rawType === undefined || rawType === null ? "quantity_tiers" : rawType;
+
+  if (!isDiscountType(type)) {
+    return {
+      status: "unsupported",
+      reason: "This discount is of a kind this version of the app cannot read.",
+    };
+  }
+
+  const unreadableTiers: TierConfig = {
+    status: "unsupported",
+    reason:
+      "The saved tiers are not in a format this version of the app can read.",
+  };
+
   const normalized: Tier[] = [];
+  const normalizedOrder: OrderTier[] = [];
 
   for (const tier of tiers) {
-    const parsed = normalizeTier(tier);
-
-    if (!parsed) {
-      return {
-        status: "unsupported",
-        reason:
-          "The saved tiers are not in a format this version of the app can read.",
-      };
+    if (type === "order_threshold") {
+      const parsed = normalizeOrderTier(tier);
+      if (!parsed) return unreadableTiers;
+      normalizedOrder.push(parsed);
+      continue;
     }
 
+    const parsed = normalizeTier(tier);
+    if (!parsed) return unreadableTiers;
     normalized.push(parsed);
   }
 
@@ -261,9 +338,21 @@ export function parseTierConfig(jsonValue: unknown): TierConfig {
     };
   }
 
+  if (type === "order_threshold") {
+    return {
+      status: "ok",
+      version,
+      type,
+      tiers: sortOrderTiers(normalizedOrder),
+      appliesTo,
+      customerEligibility,
+    };
+  }
+
   return {
     status: "ok",
     version,
+    type,
     tiers: sortTiers(normalized),
     appliesTo,
     customerEligibility,
@@ -271,13 +360,18 @@ export function parseTierConfig(jsonValue: unknown): TierConfig {
 }
 
 export function serializeTierConfig(
-  tiers: Tier[],
+  type: DiscountType,
+  tiers: Tier[] | OrderTier[],
   appliesTo: AppliesTo,
   customerEligibility: CustomerEligibility,
 ): string {
   return JSON.stringify({
     version: TIER_CONFIG_VERSION,
-    tiers: sortTiers(tiers),
+    type,
+    tiers:
+      type === "order_threshold"
+        ? sortOrderTiers(tiers as OrderTier[])
+        : sortTiers(tiers as Tier[]),
     appliesTo,
     customerEligibility,
   });
@@ -344,4 +438,20 @@ export function summarizeTiers(tiers: Tier[]): string {
       return `${describeTierRange(tier)}: ${tier.percentage}% off${cap}`;
     })
     .join(", ");
+}
+
+/** "Spend 100+: 10% off, 200+: 15% off" */
+export function summarizeOrderTiers(tiers: OrderTier[]): string {
+  return sortOrderTiers(tiers)
+    .map((tier, index) =>
+      index === 0
+        ? `Spend ${formatThreshold(tier.minSubtotal)}+: ${tier.percentage}% off`
+        : `${formatThreshold(tier.minSubtotal)}+: ${tier.percentage}% off`,
+    )
+    .join(", ");
+}
+
+/** Trims a trailing .00 so round thresholds read as 100 rather than 100.00. */
+export function formatThreshold(amount: number): string {
+  return Number.isInteger(amount) ? String(amount) : amount.toFixed(2);
 }

@@ -11,10 +11,16 @@ import {
   serializeTierConfig,
   type AppliesTo,
   type CustomerEligibility,
+  type DiscountType,
+  type OrderTier,
   type Tier,
   type TierConfig,
 } from "../lib/tiers";
-import { methodFromGid, type DiscountMethod } from "../lib/discount-id";
+import {
+  methodFromGid,
+  toDiscountGid,
+  type DiscountMethod,
+} from "../lib/discount-id";
 
 export type DiscountStatus = "ACTIVE" | "EXPIRED" | "SCHEDULED";
 
@@ -27,6 +33,8 @@ export type TieredDiscount = {
   startsAt: string;
   endsAt: string | null;
   combinesWithShipping: boolean;
+  /** Whether it may apply alongside the other discount class. */
+  combinesWithOtherDiscounts: boolean;
   /** Code discounts only. */
   code: string | null;
   usageLimit: number | null;
@@ -146,6 +154,14 @@ const SHOP_TIMEZONE_QUERY = `#graphql
   }
 `;
 
+const SHOP_CURRENCY_QUERY = `#graphql
+  query ShopCurrency {
+    shop {
+      currencyCode
+    }
+  }
+`;
+
 async function adminRequest<T>(
   admin: AdminApiContext,
   query: string,
@@ -187,6 +203,8 @@ function toTieredDiscount(node: DiscountNodePayload): TieredDiscount | null {
   const method = methodFromGid(node.id);
   if (!method) return null;
 
+  const parsedConfig = parseTierConfig(node.metafield.jsonValue);
+
   return {
     id: node.id,
     method,
@@ -195,11 +213,17 @@ function toTieredDiscount(node: DiscountNodePayload): TieredDiscount | null {
     startsAt: node.discount.startsAt ?? "",
     endsAt: node.discount.endsAt ?? null,
     combinesWithShipping: node.discount.combinesWith?.shippingDiscounts ?? false,
+    // An order discount combines outward with product discounts and the other
+    // way round, so which flag matters depends on the discount's own class.
+    combinesWithOtherDiscounts:
+      parsedConfig.status === "ok" && parsedConfig.type === "order_threshold"
+        ? (node.discount.combinesWith?.productDiscounts ?? false)
+        : (node.discount.combinesWith?.orderDiscounts ?? false),
     code: node.discount.codes?.nodes[0]?.code ?? null,
     usageLimit: node.discount.usageLimit ?? null,
     appliesOncePerCustomer: node.discount.appliesOncePerCustomer ?? false,
     usageCount: node.discount.asyncUsageCount ?? 0,
-    config: parseTierConfig(node.metafield.jsonValue),
+    config: parsedConfig,
   };
 }
 
@@ -212,6 +236,18 @@ export async function getShopTimezoneOffsetMinutes(
   );
 
   return data.shop.timezoneOffsetMinutes;
+}
+
+/** Order thresholds are entered and compared in the shop's own currency. */
+export async function getShopCurrencyCode(
+  admin: AdminApiContext,
+): Promise<string> {
+  const data = await adminRequest<{ shop: { currencyCode: string } }>(
+    admin,
+    SHOP_CURRENCY_QUERY,
+  );
+
+  return data.shop.currencyCode;
 }
 
 export async function listTieredDiscounts(
@@ -259,6 +295,7 @@ export async function getTieredDiscount(
 }
 
 export type TieredDiscountInput = {
+  discountType: DiscountType;
   method: DiscountMethod;
   /** Required when the method is code, ignored otherwise. */
   code: string | null;
@@ -269,9 +306,12 @@ export type TieredDiscountInput = {
   startsAt: string;
   endsAt: string | null;
   combinesWithShipping: boolean;
+  combinesWithOtherDiscounts: boolean;
   appliesTo: AppliesTo;
   customerEligibility: CustomerEligibility;
+  /** Only the list matching discountType is used. */
   tiers: Tier[];
+  orderTiers: OrderTier[];
 };
 
 export type DiscountUserError = {
@@ -316,14 +356,24 @@ const CREATE_CODE_MUTATION = `#graphql
  * stores and environments, and functionId is deprecated as of 2025-10.
  */
 function toDiscountInput(input: TieredDiscountInput) {
+  const isOrderThreshold = input.discountType === "order_threshold";
+
   return {
     title: input.title,
     startsAt: input.startsAt,
     endsAt: input.endsAt,
-    discountClasses: ["PRODUCT"],
+    // The class decides which operations the Function is allowed to return,
+    // so it follows the discount type and is fixed once created.
+    discountClasses: [isOrderThreshold ? "ORDER" : "PRODUCT"],
     combinesWith: {
-      orderDiscounts: false,
-      productDiscounts: false,
+      // A discount never stacks with others of its own class. The merchant
+      // chooses whether it stacks with the other class.
+      orderDiscounts: isOrderThreshold
+        ? false
+        : input.combinesWithOtherDiscounts,
+      productDiscounts: isOrderThreshold
+        ? input.combinesWithOtherDiscounts
+        : false,
       shippingDiscounts: input.combinesWithShipping,
     },
     metafields: [
@@ -332,7 +382,8 @@ function toDiscountInput(input: TieredDiscountInput) {
         key: TIER_METAFIELD_KEY,
         type: TIER_METAFIELD_TYPE,
         value: serializeTierConfig(
-          input.tiers,
+          input.discountType,
+          isOrderThreshold ? input.orderTiers : input.tiers,
           input.appliesTo,
           input.customerEligibility,
         ),
@@ -734,4 +785,62 @@ export async function getResourceTitles(
   }
 
   return titles;
+}
+
+/**
+ * The activate, deactivate and delete actions are identical on every discount
+ * list, so the routes share this instead of each repeating the dispatch.
+ */
+export async function runDiscountRowAction(
+  admin: AdminApiContext,
+  formData: FormData,
+): Promise<{ ok: boolean; message: string }> {
+  const intent = String(formData.get("intent") ?? "");
+  const id = toDiscountGid(
+    String(formData.get("method") ?? ""),
+    String(formData.get("id") ?? ""),
+  );
+
+  if (!id) {
+    return { ok: false, message: "That discount could not be found." };
+  }
+
+  try {
+    let result: MutationResult;
+    let message: string;
+
+    switch (intent) {
+      case "activate":
+        result = await setTieredDiscountActive(admin, id, true);
+        message = "Discount activated";
+        break;
+      case "deactivate":
+        result = await setTieredDiscountActive(admin, id, false);
+        message = "Discount deactivated";
+        break;
+      case "delete":
+        result = await deleteTieredDiscount(admin, id);
+        message = "Discount deleted";
+        break;
+      default:
+        return { ok: false, message: "That action is not supported." };
+    }
+
+    if (!result.ok) {
+      return {
+        ok: false,
+        message: result.userErrors.map((error) => error.message).join(" "),
+      };
+    }
+
+    return { ok: true, message };
+  } catch (error) {
+    return {
+      ok: false,
+      message:
+        error instanceof Error
+          ? error.message
+          : "Something went wrong updating the discount.",
+    };
+  }
 }
