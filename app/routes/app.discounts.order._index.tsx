@@ -26,7 +26,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   try {
     const [offsetMinutes, currencyCode, all] = await Promise.all([
       getShopTimezoneOffsetMinutes(admin),
-      getShopCurrencyCode(admin),
+      getShopCurrencyCode(admin).catch(() => ""),
       listTieredDiscounts(admin),
     ]);
 
@@ -71,7 +71,7 @@ export default function OrderDiscountsPage() {
       emptySubheading="Create a discount that takes a percentage off the whole order once the cart subtotal reaches an amount you set."
       summaryHeader="Thresholds"
       note={
-        currencyCode && discounts.length > 0 ? (
+        currencyCode && !error ? (
           <s-banner slot="supplemental-start" tone="info">
             <s-paragraph>
               Thresholds are amounts in {currencyCode}, your store&apos;s
@@ -97,9 +97,9 @@ export default function OrderDiscountsPage() {
         ) : (
           <s-stack direction="block" gap="small-300">
             <s-badge tone="warning">Not editable</s-badge>
-            <s-text color="subdued">
-              {discount.config.status === "ok" ? "" : discount.config.reason}
-            </s-text>
+            {discount.config.status === "unsupported" && (
+              <s-text color="subdued">{discount.config.reason}</s-text>
+            )}
           </s-stack>
         )
       }

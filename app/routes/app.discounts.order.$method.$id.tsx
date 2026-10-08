@@ -48,7 +48,7 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
 
   const [offsetMinutes, currencyCode, discount] = await Promise.all([
     getShopTimezoneOffsetMinutes(admin),
-    getShopCurrencyCode(admin),
+    getShopCurrencyCode(admin).catch(() => ""),
     getTieredDiscount(admin, id),
   ]);
 

@@ -72,11 +72,9 @@ export default function QuantityDiscountsPage() {
       renderSummary={(discount) =>
         discount.config.status === "ok" ? (
           <s-stack direction="block" gap="small-500">
-            <s-text>
-              {discount.config.type === "quantity_tiers"
-                ? summarizeTiers(discount.config.tiers)
-                : ""}
-            </s-text>
+            {discount.config.type === "quantity_tiers" && (
+              <s-text>{summarizeTiers(discount.config.tiers)}</s-text>
+            )}
             <s-text color="subdued">
               {summarizeAppliesTo(discount.config.appliesTo)}
               {discount.config.customerEligibility === "all"

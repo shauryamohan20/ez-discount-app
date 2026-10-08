@@ -35,7 +35,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   const [offsetMinutes, currencyCode] = await Promise.all([
     getShopTimezoneOffsetMinutes(admin),
-    getShopCurrencyCode(admin),
+    // The currency is a label on the amount field. If it cannot be read the
+    // form is still usable, so it must not take the page down.
+    getShopCurrencyCode(admin).catch(() => ""),
   ]);
 
   return { today: todayInShop(offsetMinutes), currencyCode };
@@ -186,6 +188,13 @@ export default function NewOrderDiscountPage() {
           <s-paragraph>{formError}</s-paragraph>
         </s-banner>
       )}
+
+      <s-banner slot="supplemental-start" tone="info">
+        <s-paragraph>
+          Thresholds are compared against the cart subtotal, which is the value
+          of the items before shipping and taxes.
+        </s-paragraph>
+      </s-banner>
 
       <TieredDiscountForm
         values={values}

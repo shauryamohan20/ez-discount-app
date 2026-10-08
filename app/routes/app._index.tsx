@@ -110,13 +110,15 @@ export default function HomePage() {
       <s-section slot="aside" heading="How it works">
         <s-ordered-list>
           <s-list-item>
-            Add tiers, such as 3 items for 10% off and 5 items for 15% off.
+            Add tiers. By quantity, such as 3 items for 10% off, or by
+            subtotal, such as spend 100 for 10% off.
           </s-list-item>
           <s-list-item>
-            Every item in the cart counts toward the total quantity.
+            The highest tier the cart reaches is the one that applies.
           </s-list-item>
           <s-list-item>
-            The highest tier the cart qualifies for applies to every line.
+            Quantity discounts come off each item. Whole order discounts come
+            off the order subtotal.
           </s-list-item>
         </s-ordered-list>
       </s-section>
