@@ -1,4 +1,12 @@
 import type { DiscountMethod } from "./discount-id";
+import {
+  blankBxgyForm,
+  bxgyFromFormData,
+  hasBxgyErrors,
+  validateBxgy,
+  type BxgyFormErrors,
+  type BxgyFormValues,
+} from "./bxgy-form";
 import { isCalendarDate } from "./shop-time";
 import {
   ALL_PRODUCTS,
@@ -9,6 +17,7 @@ import {
   isDiscountType,
   type AppliesTo,
   type AppliesToType,
+  type BuyXGetY,
   type CustomerEligibility,
   type DiscountType,
   type OrderTier,
@@ -68,6 +77,8 @@ export type DiscountFormValues = {
   customerEligibility: CustomerEligibility;
   tiers: TierRowValues[];
   orderTiers: OrderTierRowValues[];
+  /** Used only for a Buy X Get Y discount. */
+  bxgy: BxgyFormValues;
 };
 
 export type TierRowErrors = {
@@ -87,6 +98,7 @@ export type DiscountFormErrors = {
   tiers?: string;
   rows?: Record<string, TierRowErrors>;
   orderRows?: Record<string, OrderTierRowErrors>;
+  bxgy?: BxgyFormErrors;
 };
 
 export type ValidatedDiscount = {
@@ -102,9 +114,10 @@ export type ValidatedDiscount = {
   combinesWithOtherDiscounts: boolean;
   appliesTo: AppliesTo;
   customerEligibility: CustomerEligibility;
-  /** Only the list matching discountType is populated. */
+  /** Only the settings matching discountType are populated. */
   tiers: Tier[];
   orderTiers: OrderTier[];
+  bxgy: BuyXGetY | null;
 };
 
 export type ValidationResult =
@@ -173,10 +186,13 @@ export function blankDiscountForm(
       },
     ],
     orderTiers: [{ minSubtotal: "100", percentage: "10" }],
+    bxgy: blankBxgyForm(),
   };
 }
 
 export function hasErrors(errors: DiscountFormErrors): boolean {
+  if (hasBxgyErrors(errors.bxgy)) return true;
+
   if (
     errors.code ||
     errors.usageLimit ||
@@ -266,6 +282,35 @@ export function validateDiscountForm(
     errors.endDate = "Enter a valid date.";
   } else if (endDate && startDate && endDate <= startDate) {
     errors.endDate = "The end date must be after the start date.";
+  }
+
+  if (values.discountType === "buy_x_get_y") {
+    const bxgy = validateBxgy(values.bxgy, values.customerEligibility);
+    if (!bxgy.ok) errors.bxgy = bxgy.errors;
+
+    if (!bxgy.ok || hasErrors(errors)) return { ok: false, errors };
+
+    return {
+      ok: true,
+      value: {
+        discountType: values.discountType,
+        method: values.method,
+        code: values.method === "code" ? code : null,
+        usageLimit: values.method === "code" ? usageLimit : null,
+        appliesOncePerCustomer:
+          values.method === "code" ? values.appliesOncePerCustomer : false,
+        title,
+        startDate,
+        endDate: endDate || null,
+        combinesWithShipping: values.combinesWithShipping,
+        combinesWithOtherDiscounts: values.combinesWithOtherDiscounts,
+        appliesTo: ALL_PRODUCTS,
+        customerEligibility: values.customerEligibility,
+        tiers: [],
+        orderTiers: [],
+        bxgy: bxgy.value,
+      },
+    };
   }
 
   const isOrderThreshold = values.discountType === "order_threshold";
@@ -363,6 +408,7 @@ export function validateDiscountForm(
         customerEligibility: values.customerEligibility,
         tiers: [],
         orderTiers: sortOrderTiers(parsedOrderTiers.map((row) => row.tier)),
+        bxgy: null,
       },
     };
   }
@@ -496,6 +542,7 @@ export function validateDiscountForm(
       customerEligibility: values.customerEligibility,
       tiers: sortTiers(parsed.map((row) => row.tier)),
       orderTiers: [],
+      bxgy: null,
     },
   };
 }
@@ -551,6 +598,35 @@ export function discountFormValuesFromFormData(
       : "all",
     tiers,
     orderTiers: orderTierRowsFromFormData(formData),
+    bxgy: bxgyFromFormData(formData.get("bxgy")),
+  };
+}
+
+/**
+ * Every field the actions read, in the shape fetcher.submit sends. Shared by
+ * every create and edit page so a new field cannot be left out of one of them.
+ */
+export function formValuesToSubmission(
+  values: DiscountFormValues,
+): Record<string, string> {
+  return {
+    discountType: values.discountType,
+    method: values.method,
+    code: values.code,
+    usageLimit: values.usageLimit,
+    appliesOncePerCustomer: String(values.appliesOncePerCustomer),
+    title: values.title,
+    startDate: values.startDate,
+    endDate: values.endDate,
+    combinesWithShipping: String(values.combinesWithShipping),
+    combinesWithOtherDiscounts: String(values.combinesWithOtherDiscounts),
+    appliesToType: values.appliesToType,
+    customerEligibility: values.customerEligibility,
+    products: JSON.stringify(values.products),
+    collections: JSON.stringify(values.collections),
+    tiers: JSON.stringify(values.tiers),
+    orderTiers: JSON.stringify(values.orderTiers),
+    bxgy: JSON.stringify(values.bxgy),
   };
 }
 

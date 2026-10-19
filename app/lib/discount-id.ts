@@ -43,7 +43,7 @@ export function methodFromGid(gid: string): DiscountMethod | null {
 }
 
 /** The tab a discount lives on, which follows its kind. */
-export type DiscountTab = "quantity" | "order";
+export type DiscountTab = "quantity" | "order" | "bxgy";
 
 /**
  * The app URL for a discount's edit page, for example
@@ -59,8 +59,8 @@ export function discountPath(
 }
 
 /**
- * The tab a discount lives on: order thresholds on the order tab, everything
- * else on the quantity tab. A config this build cannot read has no type, and
+ * The tab a discount lives on: order thresholds on the order tab, Buy X Get Y
+ * on its own tab, everything else on the quantity tab. A config this build cannot read has no type, and
  * lives on the quantity tab, which is where every discount lived before the
  * split. Typed structurally so browser code can use it without importing the
  * server model.
@@ -68,8 +68,14 @@ export function discountPath(
 export function discountTab(discount: {
   config: { status: string; type?: string };
 }): DiscountTab {
-  return discount.config.status === "ok" &&
-    discount.config.type === "order_threshold"
-    ? "order"
-    : "quantity";
+  if (discount.config.status !== "ok") return "quantity";
+
+  switch (discount.config.type) {
+    case "order_threshold":
+      return "order";
+    case "buy_x_get_y":
+      return "bxgy";
+    default:
+      return "quantity";
+  }
 }

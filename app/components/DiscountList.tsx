@@ -21,6 +21,8 @@ type Props = {
   emptySubheading: string;
   /** Rendered above the table, for example a currency note. */
   note?: ReactNode;
+  /** Product and collection titles by ID, for the What it does column. */
+  titles?: Record<string, string>;
 };
 
 /**
@@ -36,6 +38,7 @@ export function DiscountList({
   emptyHeading,
   emptySubheading,
   note,
+  titles,
 }: Props) {
   const [searchParams, setSearchParams] = useSearchParams();
   const shopify = useAppBridge();
@@ -87,7 +90,11 @@ export function DiscountList({
       ) : null}
 
       {discounts.length > 0 && (
-        <DiscountTable discounts={discounts} offsetMinutes={offsetMinutes} />
+        <DiscountTable
+          discounts={discounts}
+          offsetMinutes={offsetMinutes}
+          titles={titles}
+        />
       )}
     </s-page>
   );

@@ -26,9 +26,9 @@ export default function ChooseDiscountKindPage() {
       <s-section heading="Quantity based discount">
         <s-stack direction="block" gap="base">
           <s-paragraph>
-            A percentage off the items in the cart, based on how many there
-            are. Use quantity ranges, exact quantities, a cap on discounted
-            units, and product or collection targeting.
+            A percentage off the items in the cart, based on how many there are.
+            Use quantity ranges, exact quantities, a cap on discounted units,
+            and product or collection targeting.
           </s-paragraph>
           <s-stack direction="inline">
             <s-button variant="primary" href="/app/discounts/quantity/new">
@@ -47,6 +47,21 @@ export default function ChooseDiscountKindPage() {
           <s-stack direction="inline">
             <s-button variant="primary" href="/app/discounts/order/new">
               Create whole order discount
+            </s-button>
+          </s-stack>
+        </s-stack>
+      </s-section>
+
+      <s-section heading="Buy X Get Y discount">
+        <s-stack direction="block" gap="base">
+          <s-paragraph>
+            Buy a quantity of some products and get others free or at a
+            percentage off. Buy 2 get 1 free, buy 2 get the third at half price,
+            or buy one product and get a different one.
+          </s-paragraph>
+          <s-stack direction="inline">
+            <s-button variant="primary" href="/app/discounts/bxgy/new">
+              Create Buy X Get Y discount
             </s-button>
           </s-stack>
         </s-stack>

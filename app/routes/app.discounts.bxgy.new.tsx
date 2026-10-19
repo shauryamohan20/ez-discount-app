@@ -1,0 +1,118 @@
+import { useState } from "react";
+import type {
+  ActionFunctionArgs,
+  HeadersFunction,
+  LoaderFunctionArgs,
+} from "react-router";
+import { useFetcher, useLoaderData, useRouteError } from "react-router";
+import { boundary } from "@shopify/shopify-app-react-router/server";
+
+import { authenticate } from "../shopify.server";
+import { TieredDiscountForm } from "../components/TieredDiscountForm";
+import {
+  blankDiscountForm,
+  formValuesToSubmission,
+  hasErrors,
+  validateDiscountForm,
+  type DiscountFormErrors,
+  type DiscountFormValues,
+} from "../lib/discount-form";
+import { todayInShop } from "../lib/shop-time";
+import { getShopTimezoneOffsetMinutes } from "../models/discounts.server";
+import { saveDiscountFromForm } from "../models/discount-save.server";
+
+export const loader = async ({ request }: LoaderFunctionArgs) => {
+  const { admin } = await authenticate.admin(request);
+  const offsetMinutes = await getShopTimezoneOffsetMinutes(admin);
+
+  return { today: todayInShop(offsetMinutes) };
+};
+
+export const action = async ({ request }: ActionFunctionArgs) => {
+  const { admin, redirect } = await authenticate.admin(request);
+
+  const result = await saveDiscountFromForm(
+    admin,
+    await request.formData(),
+    null,
+  );
+
+  if (!result.ok) return result;
+
+  return redirect("/app/discounts/bxgy?toast=created");
+};
+
+export default function NewBuyXGetYPage() {
+  const { today } = useLoaderData<typeof loader>();
+  const fetcher = useFetcher<typeof action>();
+
+  const [values, setValues] = useState<DiscountFormValues>(() =>
+    blankDiscountForm(today, "automatic", "buy_x_get_y"),
+  );
+  const [clientErrors, setClientErrors] = useState<DiscountFormErrors>({});
+
+  const saving = fetcher.state !== "idle";
+  const serverResult = fetcher.data && !fetcher.data.ok ? fetcher.data : null;
+  const errors = hasErrors(clientErrors)
+    ? clientErrors
+    : (serverResult?.errors ?? {});
+  const formError = serverResult?.formError ?? null;
+
+  const save = () => {
+    const validation = validateDiscountForm(values);
+
+    if (!validation.ok) {
+      setClientErrors(validation.errors);
+      return;
+    }
+
+    setClientErrors({});
+    fetcher.submit(formValuesToSubmission(values), { method: "POST" });
+  };
+
+  return (
+    <s-page heading="Create Buy X Get Y discount">
+      <s-link slot="breadcrumb-actions" href="/app/discounts/bxgy">
+        Buy X Get Y discounts
+      </s-link>
+
+      <s-button
+        slot="primary-action"
+        variant="primary"
+        onClick={save}
+        {...(saving ? { loading: true } : {})}
+      >
+        Save
+      </s-button>
+
+      <s-button slot="secondary-actions" href="/app/discounts/bxgy">
+        Cancel
+      </s-button>
+
+      {formError && (
+        <s-banner
+          slot="supplemental-start"
+          tone="critical"
+          heading="Could not save discount"
+        >
+          <s-paragraph>{formError}</s-paragraph>
+        </s-banner>
+      )}
+
+      <TieredDiscountForm
+        values={values}
+        errors={errors}
+        disabled={saving}
+        onChange={setValues}
+      />
+    </s-page>
+  );
+}
+
+export function ErrorBoundary() {
+  return boundary.error(useRouteError());
+}
+
+export const headers: HeadersFunction = (headersArgs) => {
+  return boundary.headers(headersArgs);
+};

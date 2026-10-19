@@ -45,6 +45,8 @@ type Props = {
   offsetMinutes: number;
   /** Shown above the table, for pages where it sits under other content. */
   heading?: string;
+  /** Product and collection titles by ID, for the What it does column. */
+  titles?: Record<string, string>;
 };
 
 /**
@@ -56,7 +58,12 @@ type Props = {
  * Row actions are posted to the page that renders the table, so that page's
  * route must export an action that calls runDiscountRowAction.
  */
-export function DiscountTable({ discounts, offsetMinutes, heading }: Props) {
+export function DiscountTable({
+  discounts,
+  offsetMinutes,
+  heading,
+  titles,
+}: Props) {
   const shopify = useAppBridge();
   const fetcher = useFetcher<RowActionResult>();
 
@@ -187,7 +194,7 @@ export function DiscountTable({ discounts, offsetMinutes, heading }: Props) {
                   </s-table-cell>
 
                   <s-table-cell>
-                    <DiscountSummary discount={discount} />
+                    <DiscountSummary discount={discount} titles={titles} />
                   </s-table-cell>
 
                   <s-table-cell>

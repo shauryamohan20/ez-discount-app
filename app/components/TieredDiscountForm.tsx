@@ -1,6 +1,7 @@
 import { useAppBridge } from "@shopify/app-bridge-react";
 
 import { isDiscountMethod } from "../lib/discount-id";
+import { BuyXGetYFields } from "./BuyXGetYFields";
 import {
   MAX_CODE_LENGTH,
   MAX_TITLE_LENGTH,
@@ -39,6 +40,7 @@ export function TieredDiscountForm({
   onChange,
 }: Props) {
   const isOrderThreshold = values.discountType === "order_threshold";
+  const isBuyXGetY = values.discountType === "buy_x_get_y";
   const shopify = useAppBridge();
 
   const update = (patch: Partial<DiscountFormValues>) => {
@@ -46,7 +48,9 @@ export function TieredDiscountForm({
   };
 
   const selected =
-    values.appliesToType === "collections" ? values.collections : values.products;
+    values.appliesToType === "collections"
+      ? values.collections
+      : values.products;
 
   const pickResources = async () => {
     const isCollections = values.appliesToType === "collections";
@@ -80,7 +84,9 @@ export function TieredDiscountForm({
       return;
     }
 
-    update({ products: values.products.filter((product) => product.id !== id) });
+    update({
+      products: values.products.filter((product) => product.id !== id),
+    });
   };
 
   const updateTier = (index: number, patch: Partial<TierRowValues>) => {
@@ -116,9 +122,7 @@ export function TieredDiscountForm({
 
   const removeOrderTier = (index: number) => {
     update({
-      orderTiers: values.orderTiers.filter(
-        (_, position) => position !== index,
-      ),
+      orderTiers: values.orderTiers.filter((_, position) => position !== index),
     });
   };
 
@@ -264,7 +268,9 @@ export function TieredDiscountForm({
             checked={values.combinesWithOtherDiscounts}
             {...(disabled ? { disabled: true } : {})}
             onChange={(event) =>
-              update({ combinesWithOtherDiscounts: event.currentTarget.checked })
+              update({
+                combinesWithOtherDiscounts: event.currentTarget.checked,
+              })
             }
           />
 
@@ -280,88 +286,98 @@ export function TieredDiscountForm({
         </s-stack>
       </s-section>
 
-      {!isOrderThreshold && (
-      <s-section heading="Applies to">
-        <s-stack direction="block" gap="base">
-          <s-choice-list
-            name="appliesToType"
-            label="Which products this discount applies to"
-            labelAccessibilityVisibility="exclusive"
-            values={[values.appliesToType]}
-            {...(errors.appliesTo ? { error: errors.appliesTo } : {})}
-            {...(disabled ? { disabled: true } : {})}
-            onChange={(event) => {
-              const list = event.currentTarget as HTMLElementTagNameMap["s-choice-list"];
-              const next = list.values[0] as AppliesToType | undefined;
+      {isBuyXGetY && (
+        <BuyXGetYFields
+          values={values.bxgy}
+          errors={errors.bxgy ?? {}}
+          disabled={disabled}
+          onChange={(bxgy) => update({ bxgy })}
+        />
+      )}
 
-              if (next) update({ appliesToType: next });
-            }}
-          >
-            <s-choice value="all">
-              All products
-              <s-text slot="details">Every item in the cart counts.</s-text>
-            </s-choice>
-            <s-choice value="products">
-              Specific products
-              <s-text slot="details">
-                Only the products you choose count toward the quantity.
-              </s-text>
-            </s-choice>
-            <s-choice value="collections">
-              Specific collections
-              <s-text slot="details">
-                Only products in the collections you choose count toward the
-                quantity.
-              </s-text>
-            </s-choice>
-          </s-choice-list>
+      {!isOrderThreshold && !isBuyXGetY && (
+        <s-section heading="Applies to">
+          <s-stack direction="block" gap="base">
+            <s-choice-list
+              name="appliesToType"
+              label="Which products this discount applies to"
+              labelAccessibilityVisibility="exclusive"
+              values={[values.appliesToType]}
+              {...(errors.appliesTo ? { error: errors.appliesTo } : {})}
+              {...(disabled ? { disabled: true } : {})}
+              onChange={(event) => {
+                const list =
+                  event.currentTarget as HTMLElementTagNameMap["s-choice-list"];
+                const next = list.values[0] as AppliesToType | undefined;
 
-          {values.appliesToType !== "all" && (
-            <s-stack direction="block" gap="small-100">
-              <s-stack direction="inline">
-                <s-button
-                  variant="secondary"
-                  {...(disabled ? { disabled: true } : {})}
-                  onClick={pickResources}
-                >
-                  {selected.length > 0 ? "Edit selection" : "Browse"}
-                </s-button>
-              </s-stack>
+                if (next) update({ appliesToType: next });
+              }}
+            >
+              <s-choice value="all">
+                All products
+                <s-text slot="details">Every item in the cart counts.</s-text>
+              </s-choice>
+              <s-choice value="products">
+                Specific products
+                <s-text slot="details">
+                  Only the products you choose count toward the quantity.
+                </s-text>
+              </s-choice>
+              <s-choice value="collections">
+                Specific collections
+                <s-text slot="details">
+                  Only products in the collections you choose count toward the
+                  quantity.
+                </s-text>
+              </s-choice>
+            </s-choice-list>
 
-              {selected.length === 0 ? (
-                <s-text color="subdued">Nothing selected yet.</s-text>
-              ) : (
-                selected.map((resource) => (
-                  <s-box
-                    key={resource.id}
-                    padding="small-100"
-                    borderWidth="base"
-                    borderRadius="base"
+            {values.appliesToType !== "all" && (
+              <s-stack direction="block" gap="small-100">
+                <s-stack direction="inline">
+                  <s-button
+                    variant="secondary"
+                    {...(disabled ? { disabled: true } : {})}
+                    onClick={pickResources}
                   >
-                    <s-stack
-                      direction="inline"
-                      gap="base"
-                      alignItems="center"
-                      justifyContent="space-between"
+                    {selected.length > 0 ? "Edit selection" : "Browse"}
+                  </s-button>
+                </s-stack>
+
+                {selected.length === 0 ? (
+                  <s-text color="subdued">Nothing selected yet.</s-text>
+                ) : (
+                  selected.map((resource) => (
+                    <s-box
+                      key={resource.id}
+                      padding="small-100"
+                      borderWidth="base"
+                      borderRadius="base"
                     >
-                      <s-text>{resource.title || resource.id}</s-text>
-                      <s-button
-                        variant="tertiary"
-                        tone="critical"
-                        accessibilityLabel={`Remove ${resource.title}`}
-                        {...(disabled ? { disabled: true } : {})}
-                        onClick={() => removeResource(resource.id)}
+                      <s-stack
+                        direction="inline"
+                        gap="base"
+                        alignItems="center"
+                        justifyContent="space-between"
                       >
-                        Remove
-                      </s-button>
-                    </s-stack>
-                  </s-box>
-                ))
-              )}
-            </s-stack>
-          )}
-        </s-stack>
-      </s-section>
+                        <s-text>{resource.title || resource.id}</s-text>
+                        <s-button
+                          variant="tertiary"
+                          tone="critical"
+                          accessibilityLabel={`Remove ${resource.title}`}
+                          {...(disabled ? { disabled: true } : {})}
+                          onClick={() => removeResource(resource.id)}
+                        >
+                          Remove
+                        </s-button>
+                      </s-stack>
+                    </s-box>
+                  ))
+                )}
+              </s-stack>
+            )}
+          </s-stack>
+        </s-section>
       )}
 
       <s-section heading="Eligible customers">
@@ -378,9 +394,7 @@ export function TieredDiscountForm({
               }
             }}
           >
-            <s-option value="all">
-              {CUSTOMER_ELIGIBILITY_LABELS.all}
-            </s-option>
+            <s-option value="all">{CUSTOMER_ELIGIBILITY_LABELS.all}</s-option>
             <s-option value="signedIn">
               {CUSTOMER_ELIGIBILITY_LABELS.signedIn}
             </s-option>
@@ -395,217 +409,220 @@ export function TieredDiscountForm({
           {values.customerEligibility !== "all" && (
             <s-banner tone="info">
               <s-paragraph>
-                A cart only qualifies once Shopify knows who the customer is.
-                An automatic discount will not apply to a shopper who is
-                browsing anonymously until they sign in or identify themselves
-                at checkout.
+                A cart only qualifies once Shopify knows who the customer is. An
+                automatic discount will not apply to a shopper who is browsing
+                anonymously until they sign in or identify themselves at
+                checkout.
               </s-paragraph>
             </s-banner>
           )}
         </s-stack>
       </s-section>
 
-      <s-section heading={isOrderThreshold ? "Thresholds" : "Tiers"}>
-        <s-stack direction="block" gap="base">
-          <s-paragraph>
-            {isOrderThreshold
-              ? `Each threshold is a cart subtotal. The highest one the order reaches decides the percentage off. Amounts are in ${
-                  currencyCode || "your store's currency"
-                }.`
-              : "Each tier covers a range of quantities, counting only the items this discount applies to. Leave the to quantity empty for no upper limit, or set it to the same number as the from quantity to match an exact quantity. Ranges cannot overlap."}
-          </s-paragraph>
+      {!isBuyXGetY && (
+        <s-section heading={isOrderThreshold ? "Thresholds" : "Tiers"}>
+          <s-stack direction="block" gap="base">
+            <s-paragraph>
+              {isOrderThreshold
+                ? `Each threshold is a cart subtotal. The highest one the order reaches decides the percentage off. Amounts are in ${
+                    currencyCode || "your store's currency"
+                  }.`
+                : "Each tier covers a range of quantities, counting only the items this discount applies to. Leave the to quantity empty for no upper limit, or set it to the same number as the from quantity to match an exact quantity. Ranges cannot overlap."}
+            </s-paragraph>
 
-          {errors.tiers && (
-            <s-banner tone="critical">
-              <s-paragraph>{errors.tiers}</s-paragraph>
-            </s-banner>
-          )}
+            {errors.tiers && (
+              <s-banner tone="critical">
+                <s-paragraph>{errors.tiers}</s-paragraph>
+              </s-banner>
+            )}
 
-          {isOrderThreshold &&
-            values.orderTiers.map((tier, index) => {
-              const tierErrors = orderRowErrors[String(index)] ?? {};
+            {isOrderThreshold &&
+              values.orderTiers.map((tier, index) => {
+                const tierErrors = orderRowErrors[String(index)] ?? {};
 
-              return (
-                <s-box
-                  key={index}
-                  padding="base"
-                  borderWidth="base"
-                  borderRadius="base"
-                >
-                  <s-stack
-                    direction="inline"
-                    gap="base"
-                    alignItems="start"
-                    justifyContent="space-between"
+                return (
+                  <s-box
+                    key={index}
+                    padding="base"
+                    borderWidth="base"
+                    borderRadius="base"
                   >
-                    <s-number-field
-                      label="Spend at least"
-                      value={tier.minSubtotal}
-                      min={0}
-                      step={1}
-                      {...(currencyCode ? { suffix: currencyCode } : {})}
-                      {...(tierErrors.minSubtotal
-                        ? { error: tierErrors.minSubtotal }
-                        : {})}
-                      {...(disabled ? { disabled: true } : {})}
-                      onInput={(event) =>
-                        updateOrderTier(index, {
-                          minSubtotal: event.currentTarget.value,
-                        })
-                      }
-                    />
-                    <s-number-field
-                      label="Percentage off"
-                      value={tier.percentage}
-                      min={0}
-                      max={100}
-                      suffix="%"
-                      {...(tierErrors.percentage
-                        ? { error: tierErrors.percentage }
-                        : {})}
-                      {...(disabled ? { disabled: true } : {})}
-                      onInput={(event) =>
-                        updateOrderTier(index, {
-                          percentage: event.currentTarget.value,
-                        })
-                      }
-                    />
-                    <s-button
-                      variant="tertiary"
-                      tone="critical"
-                      accessibilityLabel={`Remove threshold ${index + 1}`}
-                      {...(disabled || values.orderTiers.length === 1
-                        ? { disabled: true }
-                        : {})}
-                      onClick={() => removeOrderTier(index)}
+                    <s-stack
+                      direction="inline"
+                      gap="base"
+                      alignItems="start"
+                      justifyContent="space-between"
                     >
-                      Remove
-                    </s-button>
-                  </s-stack>
-                </s-box>
-              );
-            })}
+                      <s-number-field
+                        label="Spend at least"
+                        value={tier.minSubtotal}
+                        min={0}
+                        step={1}
+                        {...(currencyCode ? { suffix: currencyCode } : {})}
+                        {...(tierErrors.minSubtotal
+                          ? { error: tierErrors.minSubtotal }
+                          : {})}
+                        {...(disabled ? { disabled: true } : {})}
+                        onInput={(event) =>
+                          updateOrderTier(index, {
+                            minSubtotal: event.currentTarget.value,
+                          })
+                        }
+                      />
+                      <s-number-field
+                        label="Percentage off"
+                        value={tier.percentage}
+                        min={0}
+                        max={100}
+                        suffix="%"
+                        {...(tierErrors.percentage
+                          ? { error: tierErrors.percentage }
+                          : {})}
+                        {...(disabled ? { disabled: true } : {})}
+                        onInput={(event) =>
+                          updateOrderTier(index, {
+                            percentage: event.currentTarget.value,
+                          })
+                        }
+                      />
+                      <s-button
+                        variant="tertiary"
+                        tone="critical"
+                        accessibilityLabel={`Remove threshold ${index + 1}`}
+                        {...(disabled || values.orderTiers.length === 1
+                          ? { disabled: true }
+                          : {})}
+                        onClick={() => removeOrderTier(index)}
+                      >
+                        Remove
+                      </s-button>
+                    </s-stack>
+                  </s-box>
+                );
+              })}
 
-          {!isOrderThreshold &&
-            values.tiers.map((tier, index) => {
-            const tierErrors = rowErrors[String(index)] ?? {};
+            {!isOrderThreshold &&
+              values.tiers.map((tier, index) => {
+                const tierErrors = rowErrors[String(index)] ?? {};
 
-            return (
-              <s-box
-                key={index}
-                padding="base"
-                borderWidth="base"
-                borderRadius="base"
+                return (
+                  <s-box
+                    key={index}
+                    padding="base"
+                    borderWidth="base"
+                    borderRadius="base"
+                  >
+                    <s-stack direction="block" gap="base">
+                      <s-stack direction="inline" gap="base" alignItems="start">
+                        <s-number-field
+                          label="From quantity"
+                          value={tier.minQuantity}
+                          min={1}
+                          step={1}
+                          inputMode="numeric"
+                          {...(tierErrors.minQuantity
+                            ? { error: tierErrors.minQuantity }
+                            : {})}
+                          {...(disabled ? { disabled: true } : {})}
+                          onInput={(event) =>
+                            updateTier(index, {
+                              minQuantity: event.currentTarget.value,
+                            })
+                          }
+                        />
+                        <s-number-field
+                          label="To quantity"
+                          value={tier.maxQuantity}
+                          min={1}
+                          step={1}
+                          inputMode="numeric"
+                          details="Empty means no limit"
+                          {...(tierErrors.maxQuantity
+                            ? { error: tierErrors.maxQuantity }
+                            : {})}
+                          {...(disabled ? { disabled: true } : {})}
+                          onInput={(event) =>
+                            updateTier(index, {
+                              maxQuantity: event.currentTarget.value,
+                            })
+                          }
+                        />
+                        <s-number-field
+                          label="Percentage off"
+                          value={tier.percentage}
+                          min={0}
+                          max={100}
+                          suffix="%"
+                          {...(tierErrors.percentage
+                            ? { error: tierErrors.percentage }
+                            : {})}
+                          {...(disabled ? { disabled: true } : {})}
+                          onInput={(event) =>
+                            updateTier(index, {
+                              percentage: event.currentTarget.value,
+                            })
+                          }
+                        />
+                      </s-stack>
+
+                      <s-stack
+                        direction="inline"
+                        gap="base"
+                        alignItems="start"
+                        justifyContent="space-between"
+                      >
+                        <s-number-field
+                          label="Discount only this many units"
+                          value={tier.maxDiscountedUnits}
+                          min={1}
+                          step={1}
+                          inputMode="numeric"
+                          details="Empty discounts every item in the cart"
+                          {...(tierErrors.maxDiscountedUnits
+                            ? { error: tierErrors.maxDiscountedUnits }
+                            : {})}
+                          {...(disabled ? { disabled: true } : {})}
+                          onInput={(event) =>
+                            updateTier(index, {
+                              maxDiscountedUnits: event.currentTarget.value,
+                            })
+                          }
+                        />
+
+                        <s-button
+                          variant="tertiary"
+                          tone="critical"
+                          accessibilityLabel={`Remove tier ${index + 1}`}
+                          {...(disabled || values.tiers.length === 1
+                            ? { disabled: true }
+                            : {})}
+                          onClick={() => removeTier(index)}
+                        >
+                          Remove
+                        </s-button>
+                      </s-stack>
+                    </s-stack>
+                  </s-box>
+                );
+              })}
+
+            <s-stack direction="inline">
+              <s-button
+                variant="secondary"
+                {...(disabled ||
+                (isOrderThreshold
+                  ? values.orderTiers.length
+                  : values.tiers.length) >= MAX_TIERS
+                  ? { disabled: true }
+                  : {})}
+                onClick={isOrderThreshold ? addOrderTier : addTier}
               >
-                <s-stack direction="block" gap="base">
-                  <s-stack direction="inline" gap="base" alignItems="start">
-                    <s-number-field
-                      label="From quantity"
-                      value={tier.minQuantity}
-                      min={1}
-                      step={1}
-                      inputMode="numeric"
-                      {...(tierErrors.minQuantity
-                        ? { error: tierErrors.minQuantity }
-                        : {})}
-                      {...(disabled ? { disabled: true } : {})}
-                      onInput={(event) =>
-                        updateTier(index, {
-                          minQuantity: event.currentTarget.value,
-                        })
-                      }
-                    />
-                    <s-number-field
-                      label="To quantity"
-                      value={tier.maxQuantity}
-                      min={1}
-                      step={1}
-                      inputMode="numeric"
-                      details="Empty means no limit"
-                      {...(tierErrors.maxQuantity
-                        ? { error: tierErrors.maxQuantity }
-                        : {})}
-                      {...(disabled ? { disabled: true } : {})}
-                      onInput={(event) =>
-                        updateTier(index, {
-                          maxQuantity: event.currentTarget.value,
-                        })
-                      }
-                    />
-                    <s-number-field
-                      label="Percentage off"
-                      value={tier.percentage}
-                      min={0}
-                      max={100}
-                      suffix="%"
-                      {...(tierErrors.percentage
-                        ? { error: tierErrors.percentage }
-                        : {})}
-                      {...(disabled ? { disabled: true } : {})}
-                      onInput={(event) =>
-                        updateTier(index, {
-                          percentage: event.currentTarget.value,
-                        })
-                      }
-                    />
-                  </s-stack>
-
-                  <s-stack
-                    direction="inline"
-                    gap="base"
-                    alignItems="start"
-                    justifyContent="space-between"
-                  >
-                    <s-number-field
-                      label="Discount only this many units"
-                      value={tier.maxDiscountedUnits}
-                      min={1}
-                      step={1}
-                      inputMode="numeric"
-                      details="Empty discounts every item in the cart"
-                      {...(tierErrors.maxDiscountedUnits
-                        ? { error: tierErrors.maxDiscountedUnits }
-                        : {})}
-                      {...(disabled ? { disabled: true } : {})}
-                      onInput={(event) =>
-                        updateTier(index, {
-                          maxDiscountedUnits: event.currentTarget.value,
-                        })
-                      }
-                    />
-
-                    <s-button
-                      variant="tertiary"
-                      tone="critical"
-                      accessibilityLabel={`Remove tier ${index + 1}`}
-                      {...(disabled || values.tiers.length === 1
-                        ? { disabled: true }
-                        : {})}
-                      onClick={() => removeTier(index)}
-                    >
-                      Remove
-                    </s-button>
-                  </s-stack>
-                </s-stack>
-              </s-box>
-            );
-          })}
-
-          <s-stack direction="inline">
-            <s-button
-              variant="secondary"
-              {...(disabled ||
-              (isOrderThreshold ? values.orderTiers.length : values.tiers.length) >=
-                MAX_TIERS
-                ? { disabled: true }
-                : {})}
-              onClick={isOrderThreshold ? addOrderTier : addTier}
-            >
-              {isOrderThreshold ? "Add threshold" : "Add tier"}
-            </s-button>
+                {isOrderThreshold ? "Add threshold" : "Add tier"}
+              </s-button>
+            </s-stack>
           </s-stack>
-        </s-stack>
-      </s-section>
+        </s-section>
+      )}
     </>
   );
 }

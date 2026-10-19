@@ -6,10 +6,14 @@ import {
   TIER_METAFIELD_KEY,
   TIER_METAFIELD_NAMESPACE,
   TIER_METAFIELD_TYPE,
+  collectionVariablesForAppliesTo,
+  collectionVariablesForBuyXGetY,
   parseTierConfig,
+  serializeBuyXGetYConfig,
   serializeInputVariables,
   serializeTierConfig,
   type AppliesTo,
+  type BuyXGetY,
   type CustomerEligibility,
   type DiscountType,
   type OrderTier,
@@ -223,7 +227,8 @@ function toTieredDiscount(node: DiscountNodePayload): TieredDiscount | null {
     status: node.discount.status ?? "EXPIRED",
     startsAt: node.discount.startsAt ?? "",
     endsAt: node.discount.endsAt ?? null,
-    combinesWithShipping: node.discount.combinesWith?.shippingDiscounts ?? false,
+    combinesWithShipping:
+      node.discount.combinesWith?.shippingDiscounts ?? false,
     // An order discount combines outward with product discounts and the other
     // way round, so which flag matters depends on the discount's own class.
     combinesWithOtherDiscounts:
@@ -323,6 +328,8 @@ export type TieredDiscountInput = {
   /** Only the list matching discountType is used. */
   tiers: Tier[];
   orderTiers: OrderTier[];
+  /** Buy X Get Y settings, used only for that type. */
+  bxgy?: BuyXGetY | null;
 };
 
 export type DiscountUserError = {
@@ -331,8 +338,7 @@ export type DiscountUserError = {
 };
 
 export type MutationResult =
-  | { ok: true; id: string }
-  | { ok: false; userErrors: DiscountUserError[] };
+  { ok: true; id: string } | { ok: false; userErrors: DiscountUserError[] };
 
 const CREATE_AUTOMATIC_MUTATION = `#graphql
   mutation CreateTieredDiscount($discount: DiscountAutomaticAppInput!) {
@@ -366,8 +372,42 @@ const CREATE_CODE_MUTATION = `#graphql
  * The Function is referenced by handle, not by ID. Handles are stable across
  * stores and environments, and functionId is deprecated as of 2025-10.
  */
+/** The config metafield and its collection variables, for any kind. */
+function configMetafieldValues(input: TieredDiscountInput): {
+  config: string;
+  variables: string;
+} {
+  if (input.discountType === "buy_x_get_y") {
+    if (!input.bxgy) {
+      throw new Error("Buy X Get Y settings are missing.");
+    }
+
+    return {
+      config: serializeBuyXGetYConfig(input.bxgy, input.customerEligibility),
+      variables: serializeInputVariables(
+        collectionVariablesForBuyXGetY(input.bxgy),
+      ),
+    };
+  }
+
+  return {
+    config: serializeTierConfig(
+      input.discountType,
+      input.discountType === "order_threshold" ? input.orderTiers : input.tiers,
+      input.appliesTo,
+      input.customerEligibility,
+    ),
+    variables: serializeInputVariables(
+      collectionVariablesForAppliesTo(input.appliesTo),
+    ),
+  };
+}
+
 function toDiscountInput(input: TieredDiscountInput) {
+  // Buy X Get Y discounts products, so like quantity tiers it is a product
+  // discount. Only a whole order discount uses the order class.
   const isOrderThreshold = input.discountType === "order_threshold";
+  const { config, variables } = configMetafieldValues(input);
 
   return {
     title: input.title,
@@ -392,18 +432,13 @@ function toDiscountInput(input: TieredDiscountInput) {
         namespace: TIER_METAFIELD_NAMESPACE,
         key: TIER_METAFIELD_KEY,
         type: TIER_METAFIELD_TYPE,
-        value: serializeTierConfig(
-          input.discountType,
-          isOrderThreshold ? input.orderTiers : input.tiers,
-          input.appliesTo,
-          input.customerEligibility,
-        ),
+        value: config,
       },
       {
         namespace: TIER_METAFIELD_NAMESPACE,
         key: INPUT_VARIABLES_METAFIELD_KEY,
         type: TIER_METAFIELD_TYPE,
-        value: serializeInputVariables(input.appliesTo),
+        value: variables,
       },
     ],
   };
@@ -698,11 +733,9 @@ export async function setTieredDiscountActive(
         userErrors: DiscountUserError[];
       }
     >
-  >(
-    admin,
-    active ? ACTIVATE_DISCOUNT_MUTATION : DEACTIVATE_DISCOUNT_MUTATION,
-    { id },
-  );
+  >(admin, active ? ACTIVATE_DISCOUNT_MUTATION : DEACTIVATE_DISCOUNT_MUTATION, {
+    id,
+  });
 
   const payload = data[field];
 
@@ -785,17 +818,56 @@ export async function getResourceTitles(
   ids: string[],
 ): Promise<Map<string, string>> {
   const titles = new Map<string, string>();
-  if (ids.length === 0) return titles;
+  const unique = [...new Set(ids)];
 
-  const data = await adminRequest<{
-    nodes: ({ id: string; title: string } | null)[];
-  }>(admin, RESOURCE_TITLES_QUERY, { ids });
+  // nodes() takes at most 250 IDs per request, and a list page can need more
+  // than that across every discount on it.
+  for (let start = 0; start < unique.length; start += 250) {
+    const data = await adminRequest<{
+      nodes: ({ id: string; title: string } | null)[];
+    }>(admin, RESOURCE_TITLES_QUERY, { ids: unique.slice(start, start + 250) });
 
-  for (const node of data.nodes) {
-    if (node?.id) titles.set(node.id, node.title);
+    for (const node of data.nodes) {
+      if (node?.id) titles.set(node.id, node.title);
+    }
   }
 
   return titles;
+}
+
+/** Every product and collection ID the Buy X Get Y discounts name. */
+export function buyXGetYResourceIds(discounts: TieredDiscount[]): string[] {
+  const ids: string[] = [];
+
+  for (const discount of discounts) {
+    const { config } = discount;
+    if (config.status !== "ok" || config.type !== "buy_x_get_y") continue;
+
+    ids.push(...config.bxgy.buyScope.ids, ...config.bxgy.getScope.ids);
+  }
+
+  return ids;
+}
+
+/**
+ * Titles for the What it does column, as a plain object so it survives being
+ * sent to the browser. Titles are looked up live rather than stored, so a
+ * renamed product reads correctly. If the lookup fails the list still loads
+ * and the column falls back to counts.
+ */
+export async function getBuyXGetYTitles(
+  admin: AdminApiContext,
+  discounts: TieredDiscount[],
+): Promise<Record<string, string>> {
+  try {
+    const titles = await getResourceTitles(
+      admin,
+      buyXGetYResourceIds(discounts),
+    );
+    return Object.fromEntries(titles);
+  } catch {
+    return {};
+  }
 }
 
 /**

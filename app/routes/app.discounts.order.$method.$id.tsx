@@ -14,6 +14,7 @@ import { boundary } from "@shopify/shopify-app-react-router/server";
 
 import { authenticate } from "../shopify.server";
 import { TieredDiscountForm } from "../components/TieredDiscountForm";
+import { blankBxgyForm } from "../lib/bxgy-form";
 import { DiscountNotFound } from "../components/DiscountNotFound";
 import {
   discountFormValuesFromFormData,
@@ -71,6 +72,8 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
       : [];
 
   const values: DiscountFormValues = {
+    // Unused by this kind of discount, but every form carries one.
+    bxgy: blankBxgyForm(),
     discountType: "order_threshold",
     method: discount.method,
     code: discount.code ?? "",

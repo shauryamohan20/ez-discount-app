@@ -30,6 +30,7 @@ export const DISCOUNT_FUNCTION_HANDLE = "tiered-discount";
  * 3: adds appliesTo, which defaults to every product.
  * 4: adds customerEligibility, which defaults to every customer.
  * 5: adds type, which defaults to quantity tiers.
+ * 6: adds the buy_x_get_y type, which has buy and get settings, not tiers.
  *
  * Each added field is optional, so a config written by an earlier version
  * keeps the behaviour it had then and is rewritten at the current version the
@@ -37,7 +38,7 @@ export const DISCOUNT_FUNCTION_HANDLE = "tiered-discount";
  * Discounts saved by a newer version are reported as unsupported rather than
  * edited with the wrong assumptions.
  */
-export const TIER_CONFIG_VERSION = 5;
+export const TIER_CONFIG_VERSION = 6;
 
 export const MAX_TIERS = 10;
 
@@ -97,16 +98,58 @@ export function isCustomerEligibility(
  * predates order thresholds, and every one of those is a quantity tier
  * discount, so that is what a missing type means.
  */
-export type DiscountType = "quantity_tiers" | "order_threshold";
+export type DiscountType = "quantity_tiers" | "order_threshold" | "buy_x_get_y";
 
 export const DISCOUNT_TYPE_LABELS: Record<DiscountType, string> = {
   quantity_tiers: "Quantity tiers",
   order_threshold: "Order threshold",
+  buy_x_get_y: "Buy X Get Y",
 };
 
 export function isDiscountType(value: unknown): value is DiscountType {
-  return value === "quantity_tiers" || value === "order_threshold";
+  return (
+    value === "quantity_tiers" ||
+    value === "order_threshold" ||
+    value === "buy_x_get_y"
+  );
 }
+
+/** Which products count as "buy" units. */
+export type BuyScopeKind = "all" | "products" | "collections";
+
+/** Which products can be the discounted "get" units. */
+export type GetScopeKind = "same_as_buy" | "products" | "collections";
+
+/**
+ * Buy a quantity of qualifying products, get a quantity of target products at
+ * a percentage off, repeated up to maxApplicationsPerOrder times. A percentage
+ * of 100 is free. The Function's own copy of these rules is in
+ * extensions/tiered-discount/src/buy_x_get_y.ts.
+ */
+export type BuyXGetY = {
+  buyQuantity: number;
+  buyScope: { kind: BuyScopeKind; ids: string[] };
+  getQuantity: number;
+  getScope: { kind: GetScopeKind; ids: string[] };
+  percentage: number;
+  /** null means no limit. */
+  maxApplicationsPerOrder: number | null;
+};
+
+/**
+ * Shopify allows at most 100 entries in a list passed to a Function's input
+ * query, which caps collections per side. Product IDs are compared in code
+ * from the config metafield instead, and are held to the same number so the
+ * metafield stays well inside what a Function input is given.
+ */
+export const MAX_SCOPE_IDS = 100;
+
+/**
+ * Function inputs only receive metafield values up to about 10 KB. A config
+ * over this many bytes is refused before it is saved rather than silently not
+ * reaching the Function.
+ */
+export const MAX_CONFIG_BYTES = 9_500;
 
 /** A percentage off the whole order once the subtotal reaches minSubtotal. */
 export type OrderTier = {
@@ -129,6 +172,7 @@ type ConfigCommon = {
 export type TierConfig =
   | (ConfigCommon & { type: "quantity_tiers"; tiers: Tier[] })
   | (ConfigCommon & { type: "order_threshold"; tiers: OrderTier[] })
+  | (ConfigCommon & { type: "buy_x_get_y"; bxgy: BuyXGetY })
   | { status: "unsupported"; reason: string };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -242,60 +286,161 @@ function normalizeAppliesTo(value: unknown): AppliesTo | null {
   return { type, productIds, collectionIds };
 }
 
+function unsupported(reason: string): TierConfig {
+  return { status: "unsupported", reason };
+}
+
+function isWholeNumberAtLeastOne(value: unknown): value is number {
+  return typeof value === "number" && Number.isInteger(value) && value >= 1;
+}
+
+function normalizeScopeIds(value: unknown): string[] | null {
+  const ids = value ?? [];
+  if (!Array.isArray(ids)) return null;
+  if (!ids.every((id) => typeof id === "string" && id.length > 0)) return null;
+
+  return ids as string[];
+}
+
+/** The same rules the Function applies, so the app never shows what it skips. */
+function normalizeBuyXGetY(value: Record<string, unknown>): BuyXGetY | null {
+  const { buy, get } = value;
+  if (!isRecord(buy) || !isRecord(get)) return null;
+
+  if (!isWholeNumberAtLeastOne(buy.quantity)) return null;
+  if (!isWholeNumberAtLeastOne(get.quantity)) return null;
+
+  const buyScope = buy.scope;
+  const getScope = get.scope;
+  if (!isRecord(buyScope) || !isRecord(getScope)) return null;
+
+  const buyKind = buyScope.kind;
+  if (buyKind !== "all" && buyKind !== "products" && buyKind !== "collections") {
+    return null;
+  }
+
+  const getKind = getScope.kind;
+  if (
+    getKind !== "same_as_buy" &&
+    getKind !== "products" &&
+    getKind !== "collections"
+  ) {
+    return null;
+  }
+
+  const buyIds = normalizeScopeIds(buyScope.ids);
+  const getIds = normalizeScopeIds(getScope.ids);
+  if (!buyIds || !getIds) return null;
+
+  if (buyKind !== "all" && buyIds.length === 0) return null;
+  if (getKind !== "same_as_buy" && getIds.length === 0) return null;
+
+  const getValue = get.value;
+  if (!isRecord(getValue)) return null;
+
+  const { percentage } = getValue;
+  if (
+    typeof percentage !== "number" ||
+    !Number.isFinite(percentage) ||
+    percentage <= 0 ||
+    percentage > 100
+  ) {
+    return null;
+  }
+
+  const max = value.maxApplicationsPerOrder;
+  if (max !== undefined && max !== null && !isWholeNumberAtLeastOne(max)) {
+    return null;
+  }
+
+  const discountedUnits = value.discountedUnits;
+  if (discountedUnits !== undefined && discountedUnits !== "cheapest") {
+    return null;
+  }
+
+  return {
+    buyQuantity: buy.quantity,
+    buyScope: { kind: buyKind, ids: buyKind === "all" ? [] : buyIds },
+    getQuantity: get.quantity,
+    getScope: { kind: getKind, ids: getKind === "same_as_buy" ? [] : getIds },
+    percentage,
+    maxApplicationsPerOrder: max ?? null,
+  };
+}
+
 /**
  * Reads the config metafield. Anything this build does not recognise comes
  * back as "unsupported" so the UI can say so instead of guessing.
  */
 export function parseTierConfig(jsonValue: unknown): TierConfig {
   if (!isRecord(jsonValue)) {
-    return {
-      status: "unsupported",
-      reason: "The saved settings are not in the expected format.",
-    };
+    return unsupported("The saved settings are not in the expected format.");
   }
 
   const rawVersion = jsonValue.version;
   const version = rawVersion === undefined ? 1 : rawVersion;
 
   if (typeof version !== "number" || !Number.isInteger(version) || version < 1) {
-    return {
-      status: "unsupported",
-      reason: "The saved settings have an unrecognised version.",
-    };
+    return unsupported("The saved settings have an unrecognised version.");
   }
 
   if (version > TIER_CONFIG_VERSION) {
+    return unsupported(
+      "This discount was saved by a newer version of the app. Update the app to edit it.",
+    );
+  }
+
+  const rawType = jsonValue.type;
+  const type =
+    rawType === undefined || rawType === null ? "quantity_tiers" : rawType;
+
+  if (!isDiscountType(type)) {
+    return unsupported(
+      "This discount is of a kind this version of the app cannot read.",
+    );
+  }
+
+  // Absent means the config predates customer rules, so: everyone.
+  const rawEligibility = jsonValue.customerEligibility;
+  const customerEligibility =
+    rawEligibility === undefined || rawEligibility === null
+      ? "all"
+      : rawEligibility;
+
+  if (!isCustomerEligibility(customerEligibility)) {
+    return unsupported(
+      "The saved customer eligibility is not a value this version of the app can read.",
+    );
+  }
+
+  if (type === "buy_x_get_y") {
+    const bxgy = normalizeBuyXGetY(jsonValue);
+
+    if (!bxgy) {
+      return unsupported(
+        "The saved buy and get settings are not in a format this version of the app can read.",
+      );
+    }
+
     return {
-      status: "unsupported",
-      reason:
-        "This discount was saved by a newer version of the app. Update the app to edit it.",
+      status: "ok",
+      version,
+      type,
+      bxgy,
+      appliesTo: ALL_PRODUCTS,
+      customerEligibility,
     };
   }
 
   const { tiers } = jsonValue;
 
   if (!Array.isArray(tiers) || tiers.length === 0) {
-    return {
-      status: "unsupported",
-      reason: "The saved settings do not contain any tiers.",
-    };
+    return unsupported("The saved settings do not contain any tiers.");
   }
 
-  const rawType = jsonValue.type;
-  const type = rawType === undefined || rawType === null ? "quantity_tiers" : rawType;
-
-  if (!isDiscountType(type)) {
-    return {
-      status: "unsupported",
-      reason: "This discount is of a kind this version of the app cannot read.",
-    };
-  }
-
-  const unreadableTiers: TierConfig = {
-    status: "unsupported",
-    reason:
-      "The saved tiers are not in a format this version of the app can read.",
-  };
+  const unreadableTiers = unsupported(
+    "The saved tiers are not in a format this version of the app can read.",
+  );
 
   const normalized: Tier[] = [];
   const normalizedOrder: OrderTier[] = [];
@@ -316,26 +461,9 @@ export function parseTierConfig(jsonValue: unknown): TierConfig {
   const appliesTo = normalizeAppliesTo(jsonValue.appliesTo);
 
   if (!appliesTo) {
-    return {
-      status: "unsupported",
-      reason:
-        "The saved product targeting is not in a format this version of the app can read.",
-    };
-  }
-
-  // Absent means the config predates customer rules, so: everyone.
-  const rawEligibility = jsonValue.customerEligibility;
-  const customerEligibility =
-    rawEligibility === undefined || rawEligibility === null
-      ? "all"
-      : rawEligibility;
-
-  if (!isCustomerEligibility(customerEligibility)) {
-    return {
-      status: "unsupported",
-      reason:
-        "The saved customer eligibility is not a value this version of the app can read.",
-    };
+    return unsupported(
+      "The saved product targeting is not in a format this version of the app can read.",
+    );
   }
 
   if (type === "order_threshold") {
@@ -377,17 +505,150 @@ export function serializeTierConfig(
   });
 }
 
-/**
- * The Function resolves collection membership through an input query variable,
- * so the selected collection IDs are written to their own metafield whose keys
- * are variable names. Always written, including as an empty list, so the
- * variable is never missing for a discount this app created.
- */
-export function serializeInputVariables(appliesTo: AppliesTo): string {
+/** In the shape the Function reads: buy, then get with a tagged value. */
+export function serializeBuyXGetYConfig(
+  bxgy: BuyXGetY,
+  customerEligibility: CustomerEligibility,
+): string {
   return JSON.stringify({
+    version: TIER_CONFIG_VERSION,
+    type: "buy_x_get_y",
+    buy: {
+      quantity: bxgy.buyQuantity,
+      scope: {
+        kind: bxgy.buyScope.kind,
+        ids: bxgy.buyScope.kind === "all" ? [] : bxgy.buyScope.ids,
+      },
+    },
+    get: {
+      quantity: bxgy.getQuantity,
+      // A tagged value, so a fixed amount can be added later without a
+      // migration. It mirrors the shape Shopify itself uses.
+      value: { percentage: bxgy.percentage },
+      scope: {
+        kind: bxgy.getScope.kind,
+        ids: bxgy.getScope.kind === "same_as_buy" ? [] : bxgy.getScope.ids,
+      },
+    },
+    maxApplicationsPerOrder: bxgy.maxApplicationsPerOrder,
+    discountedUnits: "cheapest",
+    customerEligibility,
+  });
+}
+
+/** Bytes, which is what the Function input limit is measured in. */
+export function byteLength(value: string): number {
+  return new TextEncoder().encode(value).length;
+}
+
+/** Collection IDs for each input query variable the Function declares. */
+export type CollectionVariables = {
+  collectionIds: string[];
+  buyCollectionIds: string[];
+  getCollectionIds: string[];
+};
+
+export function collectionVariablesForAppliesTo(
+  appliesTo: AppliesTo,
+): Partial<CollectionVariables> {
+  return {
     collectionIds:
       appliesTo.type === "collections" ? appliesTo.collectionIds : [],
+  };
+}
+
+export function collectionVariablesForBuyXGetY(
+  bxgy: BuyXGetY,
+): Partial<CollectionVariables> {
+  return {
+    buyCollectionIds:
+      bxgy.buyScope.kind === "collections" ? bxgy.buyScope.ids : [],
+    getCollectionIds:
+      bxgy.getScope.kind === "collections" ? bxgy.getScope.ids : [],
+  };
+}
+
+/**
+ * The Function resolves collection membership through input query variables,
+ * so the selected collection IDs are written to their own metafield whose keys
+ * are variable names. Every variable is always written, including as an empty
+ * list, so none is ever missing for a discount this app saved.
+ */
+export function serializeInputVariables(
+  variables: Partial<CollectionVariables>,
+): string {
+  return JSON.stringify({
+    collectionIds: variables.collectionIds ?? [],
+    buyCollectionIds: variables.buyCollectionIds ?? [],
+    getCollectionIds: variables.getCollectionIds ?? [],
   });
+}
+
+/** "free", "at 50% off". */
+export function buyXGetYOffer(percentage: number): string {
+  return percentage >= 100 ? "free" : `at ${percentage}% off`;
+}
+
+/** "Buy 2, get 1 free", "Buy 2, get 1 at 50% off". */
+export function summarizeBuyXGetY(bxgy: BuyXGetY): string {
+  return `Buy ${bxgy.buyQuantity}, get ${bxgy.getQuantity} ${buyXGetYOffer(
+    bxgy.percentage,
+  )}`;
+}
+
+/**
+ * "Summer Tees", "Summer Tees and Beanies", "Summer Tees, Beanies and 3 more".
+ * Falls back to a count when no names are known.
+ */
+export function describeSelection(
+  kind: "products" | "collections",
+  ids: string[],
+  titleOf?: (id: string) => string | undefined,
+): string {
+  const names = titleOf
+    ? ids.map(titleOf).filter((name): name is string => Boolean(name))
+    : [];
+
+  if (names.length !== ids.length || names.length === 0) {
+    const noun = kind === "products" ? "product" : "collection";
+    return `${ids.length} ${ids.length === 1 ? noun : `${noun}s`}`;
+  }
+
+  if (names.length === 1) return names[0];
+  if (names.length === 2) return `${names[0]} and ${names[1]}`;
+  if (names.length === 3) return `${names[0]}, ${names[1]} and ${names[2]}`;
+
+  return `${names[0]}, ${names[1]} and ${names.length - 2} more`;
+}
+
+/**
+ * The whole offer in one sentence: "Customers who buy 2 of Summer Tees get 1
+ * of Summer Tees free, up to 3 times per order."
+ */
+export function describeBuyXGetY(
+  bxgy: BuyXGetY,
+  titleOf?: (id: string) => string | undefined,
+): string {
+  const buyWhat =
+    bxgy.buyScope.kind === "all"
+      ? "any product"
+      : describeSelection(bxgy.buyScope.kind, bxgy.buyScope.ids, titleOf);
+
+  const getWhat =
+    bxgy.getScope.kind === "same_as_buy"
+      ? buyWhat
+      : describeSelection(bxgy.getScope.kind, bxgy.getScope.ids, titleOf);
+
+  const limit =
+    bxgy.maxApplicationsPerOrder === null
+      ? ""
+      : `, up to ${bxgy.maxApplicationsPerOrder} ${
+          bxgy.maxApplicationsPerOrder === 1 ? "time" : "times"
+        } per order`;
+
+  return `Customers who buy ${bxgy.buyQuantity} of ${buyWhat} get ${
+    bxgy.getQuantity
+  } of ${getWhat} ${buyXGetYOffer(bxgy.percentage)}${limit}.`;
 }
 
 /** "All products", "3 products", "2 collections". */

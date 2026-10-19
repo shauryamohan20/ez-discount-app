@@ -9,6 +9,7 @@ import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 import { DiscountTable } from "../components/DiscountTable";
 import {
+  getBuyXGetYTitles,
   getShopTimezoneOffsetMinutes,
   listTieredDiscounts,
   runDiscountRowAction,
@@ -30,6 +31,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     const counts: KindCounts = {
       quantity: { total: 0, active: 0 },
       order: { total: 0, active: 0 },
+      bxgy: { total: 0, active: 0 },
     };
 
     for (const discount of discounts) {
@@ -38,12 +40,15 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       if (discount.status === "ACTIVE") kind.active += 1;
     }
 
-    return { discounts, offsetMinutes, counts, error: null };
+    const titles = await getBuyXGetYTitles(admin, discounts);
+
+    return { discounts, offsetMinutes, counts, titles, error: null };
   } catch (error) {
     return {
       discounts: [] as TieredDiscount[],
       offsetMinutes: 0,
       counts: null,
+      titles: {} as Record<string, string>,
       error:
         error instanceof Error
           ? error.message
@@ -99,7 +104,7 @@ function DiscountKindTile({ href, title, description, status }: TileProps) {
 }
 
 export default function HomePage() {
-  const { discounts, offsetMinutes, counts, error } =
+  const { discounts, offsetMinutes, counts, titles, error } =
     useLoaderData<typeof loader>();
 
   return (
@@ -146,20 +151,13 @@ export default function HomePage() {
               />
             </s-grid-item>
 
-            {/* Holds the place for the next kind, so the row reads as a set. */}
             <s-grid-item>
-              <s-box
-                background="subdued"
-                border="base"
-                borderRadius="base"
-                padding="base"
-                minBlockSize="160px"
-              >
-                <s-stack direction="block" gap="small-200">
-                  <s-text type="strong">More discount types</s-text>
-                  <s-text color="subdued">Coming soon.</s-text>
-                </s-stack>
-              </s-box>
+              <DiscountKindTile
+                href="/app/discounts/bxgy"
+                title="Buy X Get Y"
+                description="Buy a quantity of some products and get others free or at a discount, such as buy 2 get 1 free."
+                status={describeCounts(counts?.bxgy)}
+              />
             </s-grid-item>
           </s-grid>
         </s-query-container>
@@ -187,6 +185,7 @@ export default function HomePage() {
           heading="Your discounts"
           discounts={discounts}
           offsetMinutes={offsetMinutes}
+          titles={titles}
         />
       )}
     </s-page>
