@@ -19,6 +19,7 @@ import {
 import {
   methodFromGid,
   toDiscountGid,
+  toDiscountNumericId,
   type DiscountMethod,
 } from "../lib/discount-id";
 
@@ -198,15 +199,23 @@ function toTieredDiscount(node: DiscountNodePayload): TieredDiscount | null {
 
   if (!node.metafield) return null;
 
-  // The method decides which family of mutations applies to this discount, so
-  // it is read from the ID rather than inferred from the shape of the payload.
-  const method = methodFromGid(node.id);
-  if (!method) return null;
+  // The method decides which family of mutations applies to this discount.
+  // It is read from the discount's own type rather than from the ID prefix,
+  // because Shopify hands out several ID forms for the same discount: a
+  // DiscountAutomaticNode or DiscountCodeNode gid from the mutations, and a
+  // DiscountNode gid from the admin's own links into the app.
+  const method: DiscountMethod =
+    typename === "DiscountCodeApp" ? "code" : "automatic";
+
+  // Normalised to the form the method's mutations expect, so every lifecycle
+  // call is addressed the same way whichever ID form the discount arrived as.
+  const id = toDiscountGid(method, toDiscountNumericId(node.id));
+  if (!id) return null;
 
   const parsedConfig = parseTierConfig(node.metafield.jsonValue);
 
   return {
-    id: node.id,
+    id,
     method,
     title: node.discount.title ?? "",
     status: node.discount.status ?? "EXPIRED",
@@ -843,4 +852,51 @@ export async function runDiscountRowAction(
           : "Something went wrong updating the discount.",
     };
   }
+}
+
+/** A discount's edit page, which depends on its kind as well as its method. */
+export function discountEditPath(discount: TieredDiscount): string {
+  const tab =
+    discount.config.status === "ok" &&
+    discount.config.type === "order_threshold"
+      ? "order"
+      : "quantity";
+
+  return `/app/discounts/${tab}/${discount.method}/${toDiscountNumericId(
+    discount.id,
+  )}`;
+}
+
+/**
+ * Finds a discount from a bare numeric ID, without knowing whether it is
+ * automatic or a code. Links from the Shopify admin carry only that number,
+ * and so do URLs from before the app had one tab per kind of discount.
+ *
+ * Shopify documents the DiscountNode form for this lookup. The two concrete
+ * forms are tried after it, so a lookup that one form rejects still resolves.
+ */
+export async function findTieredDiscountByNumericId(
+  admin: AdminApiContext,
+  numericId: string | undefined,
+): Promise<TieredDiscount | null> {
+  if (!numericId || !/^\d+$/.test(numericId)) return null;
+
+  const candidates = [
+    `gid://shopify/DiscountNode/${numericId}`,
+    toDiscountGid("automatic", numericId),
+    toDiscountGid("code", numericId),
+  ];
+
+  for (const gid of candidates) {
+    if (!gid) continue;
+
+    try {
+      const discount = await getTieredDiscount(admin, gid);
+      if (discount) return discount;
+    } catch {
+      // A form Shopify does not accept for this discount: try the next one.
+    }
+  }
+
+  return null;
 }

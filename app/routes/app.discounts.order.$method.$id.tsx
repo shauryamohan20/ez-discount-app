@@ -6,7 +6,6 @@ import type {
 } from "react-router";
 import {
   isRouteErrorResponse,
-  redirect,
   useFetcher,
   useLoaderData,
   useRouteError,
@@ -15,6 +14,7 @@ import { boundary } from "@shopify/shopify-app-react-router/server";
 
 import { authenticate } from "../shopify.server";
 import { TieredDiscountForm } from "../components/TieredDiscountForm";
+import { DiscountNotFound } from "../components/DiscountNotFound";
 import {
   discountFormValuesFromFormData,
   emptyOrderTierRow,
@@ -39,7 +39,7 @@ import {
 import { toDiscountGid } from "../lib/discount-id";
 
 export const loader = async ({ request, params }: LoaderFunctionArgs) => {
-  const { admin } = await authenticate.admin(request);
+  const { admin, redirect } = await authenticate.admin(request);
 
   const id = toDiscountGid(params.method, params.id);
   if (!id) {
@@ -103,7 +103,7 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
 };
 
 export const action = async ({ request, params }: ActionFunctionArgs) => {
-  const { admin } = await authenticate.admin(request);
+  const { admin, redirect } = await authenticate.admin(request);
 
   const id = toDiscountGid(params.method, params.id);
   if (!id) {
@@ -296,24 +296,10 @@ export function ErrorBoundary() {
 
   if (isRouteErrorResponse(error) && error.status === 404) {
     return (
-      <s-page heading="Discount not found">
-        <s-link slot="breadcrumb-actions" href="/app/discounts/order">
-          Whole order discounts
-        </s-link>
-
-        <s-section>
-          <s-stack direction="block" gap="base">
-            <s-paragraph>
-              This discount no longer exists, or it was not created by this app.
-            </s-paragraph>
-            <s-stack direction="inline">
-              <s-button variant="primary" href="/app/discounts/order">
-                Back to whole order discounts
-              </s-button>
-            </s-stack>
-          </s-stack>
-        </s-section>
-      </s-page>
+      <DiscountNotFound
+        backHref="/app/discounts/order"
+        backLabel="Back to whole order discounts"
+      />
     );
   }
 

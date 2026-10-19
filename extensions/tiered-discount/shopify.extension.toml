@@ -16,6 +16,14 @@ description = "t:description"
   command = ""
   path = "dist/function.wasm"
 
+  # Where the Shopify admin opens this app when a merchant creates or opens one
+  # of its discounts from the admin's own Discounts page. :functionId and :id
+  # are filled in by the admin. Both routes look the discount up and send the
+  # merchant to the right tab, since one Function backs both kinds of discount.
+  [extensions.ui.paths]
+  create = "/app/discount/:functionId/new"
+  details = "/app/discount/:functionId/:id"
+
   # Collection membership cannot be resolved inside the function, so the
   # selected collection IDs are passed into the input query as variables.
   # They come from this metafield, whose top level keys are the variable names.

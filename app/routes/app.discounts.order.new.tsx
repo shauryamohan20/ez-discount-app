@@ -5,7 +5,6 @@ import type {
   LoaderFunctionArgs,
 } from "react-router";
 import {
-  redirect,
   useFetcher,
   useLoaderData,
   useRouteError,
@@ -44,7 +43,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-  const { admin } = await authenticate.admin(request);
+  const { admin, redirect } = await authenticate.admin(request);
 
   const formData = await request.formData();
   const values = discountFormValuesFromFormData(formData);

@@ -6,7 +6,6 @@ import type {
 } from "react-router";
 import {
   isRouteErrorResponse,
-  redirect,
   useFetcher,
   useLoaderData,
   useRouteError,
@@ -15,6 +14,7 @@ import { boundary } from "@shopify/shopify-app-react-router/server";
 
 import { authenticate } from "../shopify.server";
 import { TieredDiscountForm } from "../components/TieredDiscountForm";
+import { DiscountNotFound } from "../components/DiscountNotFound";
 import {
   discountFormValuesFromFormData,
   emptyTierRow,
@@ -40,7 +40,7 @@ import { ALL_PRODUCTS } from "../lib/tiers";
 import { toDiscountGid } from "../lib/discount-id";
 
 export const loader = async ({ request, params }: LoaderFunctionArgs) => {
-  const { admin } = await authenticate.admin(request);
+  const { admin, redirect } = await authenticate.admin(request);
 
   const id = toDiscountGid(params.method, params.id);
   if (!id) {
@@ -117,7 +117,7 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
 };
 
 export const action = async ({ request, params }: ActionFunctionArgs) => {
-  const { admin } = await authenticate.admin(request);
+  const { admin, redirect } = await authenticate.admin(request);
 
   const id = toDiscountGid(params.method, params.id);
   if (!id) {
@@ -192,8 +192,11 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
 };
 
 export default function EditDiscountPage() {
-  const { values: loadedValues, usageCount, unsupportedReason } =
-    useLoaderData<typeof loader>();
+  const {
+    values: loadedValues,
+    usageCount,
+    unsupportedReason,
+  } = useLoaderData<typeof loader>();
   const fetcher = useFetcher<typeof action>();
 
   const [values, setValues] = useState<DiscountFormValues>(loadedValues);
@@ -263,8 +266,8 @@ export default function EditDiscountPage() {
           heading="These settings were not written by this version of the app"
         >
           <s-paragraph>
-            {unsupportedReason} Saving replaces the settings on this discount with the
-            tiers below.
+            {unsupportedReason} Saving replaces the settings on this discount
+            with the tiers below.
           </s-paragraph>
         </s-banner>
       )}
@@ -308,24 +311,10 @@ export function ErrorBoundary() {
   // responses Shopify throws during authentication, goes to their boundary.
   if (isRouteErrorResponse(error) && error.status === 404) {
     return (
-      <s-page heading="Discount not found">
-        <s-link slot="breadcrumb-actions" href="/app/discounts/quantity">
-          Quantity based discounts
-        </s-link>
-
-        <s-section>
-          <s-stack direction="block" gap="base">
-            <s-paragraph>
-              This discount no longer exists, or it was not created by this app.
-            </s-paragraph>
-            <s-stack direction="inline">
-              <s-button variant="primary" href="/app/discounts/quantity">
-                Back to discounts
-              </s-button>
-            </s-stack>
-          </s-stack>
-        </s-section>
-      </s-page>
+      <DiscountNotFound
+        backHref="/app/discounts/quantity"
+        backLabel="Back to quantity based discounts"
+      />
     );
   }
 

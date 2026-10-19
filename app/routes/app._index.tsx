@@ -17,7 +17,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       discount.config.status === "ok" &&
       discount.config.type === "order_threshold";
 
-    const quantity = discounts.filter((discount) => !isOrderThreshold(discount));
+    const quantity = discounts.filter(
+      (discount) => !isOrderThreshold(discount),
+    );
     const order = discounts.filter(isOrderThreshold);
 
     const counts = (group: typeof discounts) => ({
@@ -49,7 +51,7 @@ export default function HomePage() {
       <s-button
         slot="primary-action"
         variant="primary"
-        href="/app/discounts/quantity/new"
+        href="/app/discounts/new"
       >
         Create discount
       </s-button>
@@ -64,7 +66,9 @@ export default function HomePage() {
 
           <s-paragraph>
             {loadFailed ? (
-              <s-link href="/app/discounts/quantity">View your discounts</s-link>
+              <s-link href="/app/discounts/quantity">
+                View your discounts
+              </s-link>
             ) : quantity.total === 0 ? (
               <s-link href="/app/discounts/quantity/new">
                 Create your first one
@@ -84,9 +88,9 @@ export default function HomePage() {
       <s-section heading="Whole order discounts">
         <s-stack direction="block" gap="base">
           <s-paragraph>
-            Take a percentage off the whole order once the cart subtotal
-            reaches an amount you set. Spend 100 and save 10 percent, spend 200
-            and save 15.
+            Take a percentage off the whole order once the cart subtotal reaches
+            an amount you set. Spend 100 and save 10 percent, spend 200 and save
+            15.
           </s-paragraph>
 
           <s-paragraph>
@@ -110,8 +114,8 @@ export default function HomePage() {
       <s-section slot="aside" heading="How it works">
         <s-ordered-list>
           <s-list-item>
-            Add tiers. By quantity, such as 3 items for 10% off, or by
-            subtotal, such as spend 100 for 10% off.
+            Add tiers. By quantity, such as 3 items for 10% off, or by subtotal,
+            such as spend 100 for 10% off.
           </s-list-item>
           <s-list-item>
             The highest tier the cart reaches is the one that applies.
