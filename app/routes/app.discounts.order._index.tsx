@@ -63,13 +63,13 @@ export default function OrderDiscountsPage() {
   return (
     <DiscountList
       heading="Whole order discounts"
+      tab="order"
       discounts={discounts}
       offsetMinutes={offsetMinutes}
       error={error}
       newHref="/app/discounts/order/new"
       emptyHeading="No whole order discounts yet"
       emptySubheading="Create a discount that takes a percentage off the whole order once the cart subtotal reaches an amount you set."
-      summaryHeader="Thresholds"
       note={
         currencyCode && !error ? (
           <s-banner slot="supplemental-start" tone="info">

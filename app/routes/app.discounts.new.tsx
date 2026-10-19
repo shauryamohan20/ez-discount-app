@@ -19,8 +19,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 export default function ChooseDiscountKindPage() {
   return (
     <s-page heading="Create a discount">
-      <s-link slot="breadcrumb-actions" href="/app">
-        EZ Discounts
+      <s-link slot="breadcrumb-actions" href="/app/discounts/quantity">
+        Discounts
       </s-link>
 
       <s-section heading="Quantity based discount">

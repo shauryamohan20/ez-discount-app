@@ -2,8 +2,15 @@ import { useEffect, useState, type ReactNode } from "react";
 import { useFetcher, useSearchParams } from "react-router";
 import { useAppBridge } from "@shopify/app-bridge-react";
 
-import type { DiscountStatus, TieredDiscount } from "../models/discounts.server";
-import { discountPath, toDiscountNumericId } from "../lib/discount-id";
+import type {
+  DiscountStatus,
+  TieredDiscount,
+} from "../models/discounts.server";
+import {
+  discountPath,
+  toDiscountNumericId,
+  type DiscountTab,
+} from "../lib/discount-id";
 import { formatShopDate } from "../lib/shop-time";
 
 const CONFIRM_MODAL_ID = "confirm-discount-action";
@@ -29,6 +36,8 @@ type RowActionResult = { ok: boolean; message: string } | undefined;
 
 type Props = {
   heading: string;
+  /** Which kind's tab this is, which every row's edit link points into. */
+  tab: DiscountTab;
   discounts: TieredDiscount[];
   offsetMinutes: number;
   error: string | null;
@@ -36,9 +45,12 @@ type Props = {
   newHref: string;
   emptyHeading: string;
   emptySubheading: string;
-  /** Per type, because a quantity tier and a threshold read nothing alike. */
+  /**
+   * The "What it does" cell. Supplied per kind, because a quantity tier and an
+   * order threshold read nothing alike. Every other column is the same on
+   * every kind of discount, so all of them share one table.
+   */
   renderSummary: (discount: TieredDiscount) => ReactNode;
-  summaryHeader: string;
   /** Rendered above the table, for example a currency note. */
   note?: ReactNode;
 };
@@ -55,6 +67,7 @@ type PendingAction = {
 
 export function DiscountList({
   heading,
+  tab,
   discounts,
   offsetMinutes,
   error,
@@ -62,7 +75,6 @@ export function DiscountList({
   emptyHeading,
   emptySubheading,
   renderSummary,
-  summaryHeader,
   note,
 }: Props) {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -136,7 +148,8 @@ export function DiscountList({
   };
 
   return (
-    <s-page heading={heading}>
+    // Full width, so the table uses all the space the admin gives the app.
+    <s-page heading={heading} inlineSize="large">
       <s-button slot="primary-action" variant="primary" href={newHref}>
         Create discount
       </s-button>
@@ -180,10 +193,13 @@ export function DiscountList({
             <s-table-header-row>
               <s-table-header listSlot="primary">Title</s-table-header>
               <s-table-header listSlot="inline">Status</s-table-header>
-              <s-table-header listSlot="labeled">Method</s-table-header>
-              <s-table-header listSlot="labeled">{summaryHeader}</s-table-header>
-              <s-table-header listSlot="labeled">Starts</s-table-header>
-              <s-table-header listSlot="labeled">Ends</s-table-header>
+              <s-table-header listSlot="labeled">
+                Code / Automatic
+              </s-table-header>
+              <s-table-header listSlot="labeled">What it does</s-table-header>
+              <s-table-header listSlot="labeled">
+                Start and end date
+              </s-table-header>
               <s-table-header listSlot="labeled">Actions</s-table-header>
             </s-table-header-row>
 
@@ -203,7 +219,7 @@ export function DiscountList({
                       {editable ? (
                         <s-link
                           id={linkId}
-                          href={discountPath(discount.method, discount.id)}
+                          href={discountPath(tab, discount.method, discount.id)}
                         >
                           {discount.title}
                         </s-link>
@@ -236,17 +252,17 @@ export function DiscountList({
                     <s-table-cell>{renderSummary(discount)}</s-table-cell>
 
                     <s-table-cell>
-                      <s-text>
-                        {formatShopDate(discount.startsAt, offsetMinutes)}
-                      </s-text>
-                    </s-table-cell>
-
-                    <s-table-cell>
-                      <s-text>
-                        {discount.endsAt
-                          ? formatShopDate(discount.endsAt, offsetMinutes)
-                          : "No end date"}
-                      </s-text>
+                      <s-stack direction="block" gap="small-500">
+                        <s-text>
+                          Starts{" "}
+                          {formatShopDate(discount.startsAt, offsetMinutes)}
+                        </s-text>
+                        <s-text color="subdued">
+                          {discount.endsAt
+                            ? `Ends ${formatShopDate(discount.endsAt, offsetMinutes)}`
+                            : "No end date"}
+                        </s-text>
+                      </s-stack>
                     </s-table-cell>
 
                     <s-table-cell>

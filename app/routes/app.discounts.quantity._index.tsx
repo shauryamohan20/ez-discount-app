@@ -62,13 +62,13 @@ export default function QuantityDiscountsPage() {
   return (
     <DiscountList
       heading="Quantity based discounts"
+      tab="quantity"
       discounts={discounts}
       offsetMinutes={offsetMinutes}
       error={error}
       newHref="/app/discounts/quantity/new"
       emptyHeading="No quantity based discounts yet"
       emptySubheading="Create a discount that takes more off the more items a customer adds to their cart."
-      summaryHeader="Tiers"
       renderSummary={(discount) =>
         discount.config.status === "ok" ? (
           <s-stack direction="block" gap="small-500">

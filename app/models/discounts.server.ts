@@ -17,10 +17,12 @@ import {
   type TierConfig,
 } from "../lib/tiers";
 import {
+  discountPath,
   methodFromGid,
   toDiscountGid,
   toDiscountNumericId,
   type DiscountMethod,
+  type DiscountTab,
 } from "../lib/discount-id";
 
 export type DiscountStatus = "ACTIVE" | "EXPIRED" | "SCHEDULED";
@@ -856,15 +858,15 @@ export async function runDiscountRowAction(
 
 /** A discount's edit page, which depends on its kind as well as its method. */
 export function discountEditPath(discount: TieredDiscount): string {
-  const tab =
-    discount.config.status === "ok" &&
-    discount.config.type === "order_threshold"
-      ? "order"
-      : "quantity";
+  return discountPath(discountTab(discount), discount.method, discount.id);
+}
 
-  return `/app/discounts/${tab}/${discount.method}/${toDiscountNumericId(
-    discount.id,
-  )}`;
+/** Order thresholds on the order tab, everything else on the quantity tab. */
+export function discountTab(discount: TieredDiscount): DiscountTab {
+  return discount.config.status === "ok" &&
+    discount.config.type === "order_threshold"
+    ? "order"
+    : "quantity";
 }
 
 /**

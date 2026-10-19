@@ -42,7 +42,18 @@ export function methodFromGid(gid: string): DiscountMethod | null {
   return null;
 }
 
-/** The app URL for a discount, for example /app/discounts/code/123. */
-export function discountPath(method: DiscountMethod, gid: string): string {
-  return `/app/discounts/${method}/${toDiscountNumericId(gid)}`;
+/** The tab a discount lives on, which follows its kind. */
+export type DiscountTab = "quantity" | "order";
+
+/**
+ * The app URL for a discount's edit page, for example
+ * /app/discounts/order/code/123. The tab is part of the path because each
+ * kind of discount has its own pages.
+ */
+export function discountPath(
+  tab: DiscountTab,
+  method: DiscountMethod,
+  gid: string,
+): string {
+  return `/app/discounts/${tab}/${method}/${toDiscountNumericId(gid)}`;
 }

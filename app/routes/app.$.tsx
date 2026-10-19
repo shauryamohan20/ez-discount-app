@@ -21,17 +21,16 @@ function PageNotFound() {
       <s-section>
         <s-stack direction="block" gap="base">
           <s-paragraph>
-            There is nothing at this address. It may have moved, or the link
-            may be out of date.
+            There is nothing at this address. It may have moved, or the link may
+            be out of date.
           </s-paragraph>
           <s-stack direction="inline" gap="base">
-            <s-button variant="primary" href="/app">
-              Go to EZ Discounts
-            </s-button>
-            <s-button href="/app/discounts/quantity">
+            <s-button variant="primary" href="/app/discounts/quantity">
               Quantity based discounts
             </s-button>
-            <s-button href="/app/discounts/order">Whole order discounts</s-button>
+            <s-button href="/app/discounts/order">
+              Whole order discounts
+            </s-button>
           </s-stack>
         </s-stack>
       </s-section>
