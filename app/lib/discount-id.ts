@@ -57,3 +57,19 @@ export function discountPath(
 ): string {
   return `/app/discounts/${tab}/${method}/${toDiscountNumericId(gid)}`;
 }
+
+/**
+ * The tab a discount lives on: order thresholds on the order tab, everything
+ * else on the quantity tab. A config this build cannot read has no type, and
+ * lives on the quantity tab, which is where every discount lived before the
+ * split. Typed structurally so browser code can use it without importing the
+ * server model.
+ */
+export function discountTab(discount: {
+  config: { status: string; type?: string };
+}): DiscountTab {
+  return discount.config.status === "ok" &&
+    discount.config.type === "order_threshold"
+    ? "order"
+    : "quantity";
+}

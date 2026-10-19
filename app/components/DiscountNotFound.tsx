@@ -10,8 +10,8 @@ type Props = {
  * with a way back, rather than as a crash.
  */
 export function DiscountNotFound({
-  backHref = "/app/discounts/quantity",
-  backLabel = "Back to discounts",
+  backHref = "/app",
+  backLabel = "Back to EZ Discounts",
 }: Props) {
   return (
     <s-page heading="Discount not found">

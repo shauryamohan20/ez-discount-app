@@ -14,11 +14,7 @@ import {
   runDiscountRowAction,
 } from "../models/discounts.server";
 import type { TieredDiscount } from "../models/discounts.server";
-import {
-  CUSTOMER_ELIGIBILITY_LABELS,
-  summarizeAppliesTo,
-  summarizeTiers,
-} from "../lib/tiers";
+import { discountTab } from "../lib/discount-id";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin } = await authenticate.admin(request);
@@ -29,12 +25,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       listTieredDiscounts(admin),
     ]);
 
-    // A config this build cannot read has no type to filter on, so it is shown
-    // on this tab, which is where every discount lived before the split.
     const discounts = all.filter(
-      (discount) =>
-        discount.config.status !== "ok" ||
-        discount.config.type === "quantity_tiers",
+      (discount) => discountTab(discount) === "quantity",
     );
 
     return { discounts, offsetMinutes, error: null };
@@ -62,35 +54,12 @@ export default function QuantityDiscountsPage() {
   return (
     <DiscountList
       heading="Quantity based discounts"
-      tab="quantity"
       discounts={discounts}
       offsetMinutes={offsetMinutes}
       error={error}
       newHref="/app/discounts/quantity/new"
       emptyHeading="No quantity based discounts yet"
       emptySubheading="Create a discount that takes more off the more items a customer adds to their cart."
-      renderSummary={(discount) =>
-        discount.config.status === "ok" ? (
-          <s-stack direction="block" gap="small-500">
-            {discount.config.type === "quantity_tiers" && (
-              <s-text>{summarizeTiers(discount.config.tiers)}</s-text>
-            )}
-            <s-text color="subdued">
-              {summarizeAppliesTo(discount.config.appliesTo)}
-              {discount.config.customerEligibility === "all"
-                ? ""
-                : ` to ${CUSTOMER_ELIGIBILITY_LABELS[
-                    discount.config.customerEligibility
-                  ].toLowerCase()}`}
-            </s-text>
-          </s-stack>
-        ) : (
-          <s-stack direction="block" gap="small-300">
-            <s-badge tone="warning">Not editable</s-badge>
-            <s-text color="subdued">{discount.config.reason}</s-text>
-          </s-stack>
-        )
-      }
     />
   );
 }

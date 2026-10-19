@@ -15,10 +15,7 @@ import {
   runDiscountRowAction,
 } from "../models/discounts.server";
 import type { TieredDiscount } from "../models/discounts.server";
-import {
-  CUSTOMER_ELIGIBILITY_LABELS,
-  summarizeOrderTiers,
-} from "../lib/tiers";
+import { discountTab } from "../lib/discount-id";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin } = await authenticate.admin(request);
@@ -26,14 +23,13 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   try {
     const [offsetMinutes, currencyCode, all] = await Promise.all([
       getShopTimezoneOffsetMinutes(admin),
+      // The currency is a label in a note, so it must not take the page down.
       getShopCurrencyCode(admin).catch(() => ""),
       listTieredDiscounts(admin),
     ]);
 
     const discounts = all.filter(
-      (discount) =>
-        discount.config.status === "ok" &&
-        discount.config.type === "order_threshold",
+      (discount) => discountTab(discount) === "order",
     );
 
     return { discounts, offsetMinutes, currencyCode, error: null };
@@ -63,7 +59,6 @@ export default function OrderDiscountsPage() {
   return (
     <DiscountList
       heading="Whole order discounts"
-      tab="order"
       discounts={discounts}
       offsetMinutes={offsetMinutes}
       error={error}
@@ -80,28 +75,6 @@ export default function OrderDiscountsPage() {
             </s-paragraph>
           </s-banner>
         ) : undefined
-      }
-      renderSummary={(discount) =>
-        discount.config.status === "ok" &&
-        discount.config.type === "order_threshold" ? (
-          <s-stack direction="block" gap="small-500">
-            <s-text>{summarizeOrderTiers(discount.config.tiers)}</s-text>
-            <s-text color="subdued">
-              {discount.config.customerEligibility === "all"
-                ? "All customers"
-                : CUSTOMER_ELIGIBILITY_LABELS[
-                    discount.config.customerEligibility
-                  ]}
-            </s-text>
-          </s-stack>
-        ) : (
-          <s-stack direction="block" gap="small-300">
-            <s-badge tone="warning">Not editable</s-badge>
-            {discount.config.status === "unsupported" && (
-              <s-text color="subdued">{discount.config.reason}</s-text>
-            )}
-          </s-stack>
-        )
       }
     />
   );

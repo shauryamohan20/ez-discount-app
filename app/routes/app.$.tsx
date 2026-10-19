@@ -25,7 +25,10 @@ function PageNotFound() {
             be out of date.
           </s-paragraph>
           <s-stack direction="inline" gap="base">
-            <s-button variant="primary" href="/app/discounts/quantity">
+            <s-button variant="primary" href="/app">
+              Go to EZ Discounts
+            </s-button>
+            <s-button href="/app/discounts/quantity">
               Quantity based discounts
             </s-button>
             <s-button href="/app/discounts/order">

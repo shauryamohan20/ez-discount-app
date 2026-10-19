@@ -1,14 +1,202 @@
-import type { LoaderFunctionArgs } from "react-router";
+import type {
+  ActionFunctionArgs,
+  HeadersFunction,
+  LoaderFunctionArgs,
+} from "react-router";
+import { useLoaderData, useRouteError } from "react-router";
+import { boundary } from "@shopify/shopify-app-react-router/server";
 
 import { authenticate } from "../shopify.server";
+import { DiscountTable } from "../components/DiscountTable";
+import {
+  getShopTimezoneOffsetMinutes,
+  listTieredDiscounts,
+  runDiscountRowAction,
+} from "../models/discounts.server";
+import type { TieredDiscount } from "../models/discounts.server";
+import { discountTab, type DiscountTab } from "../lib/discount-id";
 
-/**
- * The app opens straight onto its first discount tab rather than an overview
- * page. Shopify's redirect keeps the embedded app's parameters on a full page
- * load, which is how the admin opens the app.
- */
+type KindCounts = Record<DiscountTab, { total: number; active: number }>;
+
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { redirect } = await authenticate.admin(request);
+  const { admin } = await authenticate.admin(request);
 
-  return redirect("/app/discounts/quantity");
+  try {
+    const [offsetMinutes, discounts] = await Promise.all([
+      getShopTimezoneOffsetMinutes(admin),
+      listTieredDiscounts(admin),
+    ]);
+
+    const counts: KindCounts = {
+      quantity: { total: 0, active: 0 },
+      order: { total: 0, active: 0 },
+    };
+
+    for (const discount of discounts) {
+      const kind = counts[discountTab(discount)];
+      kind.total += 1;
+      if (discount.status === "ACTIVE") kind.active += 1;
+    }
+
+    return { discounts, offsetMinutes, counts, error: null };
+  } catch (error) {
+    return {
+      discounts: [] as TieredDiscount[],
+      offsetMinutes: 0,
+      counts: null,
+      error:
+        error instanceof Error
+          ? error.message
+          : "Something went wrong loading your discounts.",
+    };
+  }
+};
+
+/** The table below the tiles has row actions, which post here. */
+export const action = async ({ request }: ActionFunctionArgs) => {
+  const { admin } = await authenticate.admin(request);
+
+  return runDiscountRowAction(admin, await request.formData());
+};
+
+/** "3 discounts, 2 active", or nothing when the counts could not be read. */
+function describeCounts(counts: { total: number; active: number } | undefined) {
+  if (!counts) return "";
+  if (counts.total === 0) return "None yet";
+
+  return `${counts.total} ${counts.total === 1 ? "discount" : "discounts"}, ${
+    counts.active
+  } active`;
+}
+
+type TileProps = {
+  href: string;
+  title: string;
+  description: string;
+  status: string;
+};
+
+/** One kind of discount. The whole tile is the link to that kind's page. */
+function DiscountKindTile({ href, title, description, status }: TileProps) {
+  return (
+    <s-clickable
+      href={href}
+      accessibilityLabel={`Open ${title.toLowerCase()} discounts`}
+      background="base"
+      border="base"
+      borderRadius="base"
+      padding="base"
+      minBlockSize="160px"
+      inlineSize="100%"
+    >
+      <s-stack direction="block" gap="small-200">
+        <s-text type="strong">{title}</s-text>
+        <s-text>{description}</s-text>
+        {status && <s-text color="subdued">{status}</s-text>}
+      </s-stack>
+    </s-clickable>
+  );
+}
+
+export default function HomePage() {
+  const { discounts, offsetMinutes, counts, error } =
+    useLoaderData<typeof loader>();
+
+  return (
+    <s-page heading="EZ Discounts" inlineSize="large">
+      <s-button
+        slot="primary-action"
+        variant="primary"
+        href="/app/discounts/new"
+      >
+        Create discount
+      </s-button>
+
+      {error && (
+        <s-banner
+          slot="supplemental-start"
+          tone="critical"
+          heading="Could not load discounts"
+        >
+          <s-paragraph>{error}</s-paragraph>
+        </s-banner>
+      )}
+
+      <s-section heading="Discount types">
+        <s-query-container>
+          <s-grid
+            gridTemplateColumns="@container (inline-size > 640px) 1fr 1fr 1fr, 1fr"
+            gap="base"
+          >
+            <s-grid-item>
+              <DiscountKindTile
+                href="/app/discounts/quantity"
+                title="Quantity based"
+                description="Take more off the more items a customer buys, with quantity ranges, exact quantities and a cap on discounted units."
+                status={describeCounts(counts?.quantity)}
+              />
+            </s-grid-item>
+
+            <s-grid-item>
+              <DiscountKindTile
+                href="/app/discounts/order"
+                title="Whole order"
+                description="Take a percentage off the entire order once the cart subtotal reaches an amount you set."
+                status={describeCounts(counts?.order)}
+              />
+            </s-grid-item>
+
+            {/* Holds the place for the next kind, so the row reads as a set. */}
+            <s-grid-item>
+              <s-box
+                background="subdued"
+                border="base"
+                borderRadius="base"
+                padding="base"
+                minBlockSize="160px"
+              >
+                <s-stack direction="block" gap="small-200">
+                  <s-text type="strong">More discount types</s-text>
+                  <s-text color="subdued">Coming soon.</s-text>
+                </s-stack>
+              </s-box>
+            </s-grid-item>
+          </s-grid>
+        </s-query-container>
+      </s-section>
+
+      {!error && discounts.length === 0 ? (
+        <s-section heading="Your discounts">
+          <s-empty-state heading="No discounts yet">
+            <s-text slot="subheading">
+              Pick a discount type above to create your first one.
+            </s-text>
+            <s-button
+              slot="primary-action"
+              variant="primary"
+              href="/app/discounts/new"
+            >
+              Create discount
+            </s-button>
+          </s-empty-state>
+        </s-section>
+      ) : null}
+
+      {discounts.length > 0 && (
+        <DiscountTable
+          heading="Your discounts"
+          discounts={discounts}
+          offsetMinutes={offsetMinutes}
+        />
+      )}
+    </s-page>
+  );
+}
+
+export function ErrorBoundary() {
+  return boundary.error(useRouteError());
+}
+
+export const headers: HeadersFunction = (headersArgs) => {
+  return boundary.headers(headersArgs);
 };
