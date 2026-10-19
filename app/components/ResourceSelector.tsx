@@ -29,12 +29,22 @@ export function ResourceSelector({
   const noun = type === "product" ? "product" : "collection";
 
   const browse = async () => {
-    const picked = await shopify.resourcePicker({
-      type,
-      multiple: max,
-      action: "select",
-      selectionIds: selected.map((resource) => ({ id: resource.id })),
-    });
+    let picked: Awaited<ReturnType<typeof shopify.resourcePicker>>;
+
+    try {
+      picked = await shopify.resourcePicker({
+        type,
+        multiple: max,
+        action: "select",
+        selectionIds: selected.map((resource) => ({ id: resource.id })),
+      });
+    } catch {
+      // Without this the button would simply appear to do nothing.
+      shopify.toast.show(`Could not open the ${noun} picker. Try again.`, {
+        isError: true,
+      });
+      return;
+    }
 
     // The picker resolves undefined when the merchant cancels, which is not
     // the same as clearing the selection.

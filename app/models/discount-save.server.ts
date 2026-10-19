@@ -57,6 +57,14 @@ export async function saveDiscountFromForm(
     if (!result.ok) {
       const { errors, unmapped } = mapUserErrors(result.userErrors);
 
+      // An error about the settings metafield is shown against the tiers, but
+      // Buy X Get Y has no tiers section, so there it would have nowhere to
+      // appear. It goes in the banner instead, so a failed save always says why.
+      if (rest.discountType === "buy_x_get_y" && errors.tiers) {
+        unmapped.push(errors.tiers);
+        delete errors.tiers;
+      }
+
       return {
         ok: false,
         errors,
