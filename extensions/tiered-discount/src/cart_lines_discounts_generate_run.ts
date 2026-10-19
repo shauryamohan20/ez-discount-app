@@ -6,7 +6,8 @@ import {
   CartLinesDiscountsGenerateRunResult,
   CartOperation,
   ProductDiscountCandidateTarget,
-} from '../generated/api';
+} from "../generated/api";
+import { runBuyXGetY } from "./buy_x_get_y";
 
 /**
  * Written by the app into the `$app:tiered` / `config` metafield.
@@ -14,13 +15,14 @@ import {
  * Version 1 tiers only had minQuantity and percentage and were always open
  * ended. Version 2 added maxQuantity and maxDiscountedUnits. Version 3 added
  * appliesTo. Version 4 added customerEligibility. Version 5 added type.
+ * Version 6 added the buy_x_get_y type, whose settings live in buy_x_get_y.ts.
  *
  * Every added field is optional here, so a config written by any earlier
  * version of the app still behaves the way it did then. In particular a
  * missing type means quantity tiers, which is what every config written
  * before order thresholds existed is.
  */
-type DiscountType = 'quantity_tiers' | 'order_threshold';
+type DiscountType = "quantity_tiers" | "order_threshold" | "buy_x_get_y";
 
 type QuantityTier = {
   minQuantity: number;
@@ -35,11 +37,11 @@ type OrderTier = {
 };
 
 type AppliesTo = {
-  type?: 'all' | 'products' | 'collections';
+  type?: "all" | "products" | "collections";
   productIds?: string[] | null;
 };
 
-type CustomerEligibility = 'all' | 'signedIn' | 'firstOrder' | 'returning';
+type CustomerEligibility = "all" | "signedIn" | "firstOrder" | "returning";
 
 type TierConfig = {
   type?: DiscountType | null;
@@ -48,10 +50,10 @@ type TierConfig = {
   customerEligibility?: CustomerEligibility | null;
 };
 
-type Line = CartInput['cart']['lines'][number];
-type BuyerIdentity = CartInput['cart']['buyerIdentity'];
+type Line = CartInput["cart"]["lines"][number];
+type BuyerIdentity = CartInput["cart"]["buyerIdentity"];
 
-const NOTHING: CartLinesDiscountsGenerateRunResult = {operations: []};
+const NOTHING: CartLinesDiscountsGenerateRunResult = { operations: [] };
 
 /** Money is compared in whole cents so 99.99 and 100.00 never drift. */
 function toCents(amount: number): number {
@@ -60,7 +62,7 @@ function toCents(amount: number): number {
 
 function isPercentage(value: unknown): value is number {
   return (
-    typeof value === 'number' &&
+    typeof value === "number" &&
     Number.isFinite(value) &&
     value > 0 &&
     value <= 100
@@ -75,13 +77,14 @@ function validQuantityTiers(tiers: unknown[]): QuantityTier[] {
   const valid: QuantityTier[] = [];
 
   for (const tier of tiers) {
-    if (typeof tier !== 'object' || tier === null) continue;
+    if (typeof tier !== "object" || tier === null) continue;
 
     const candidate = tier as Record<string, unknown>;
-    const {minQuantity, percentage, maxQuantity, maxDiscountedUnits} = candidate;
+    const { minQuantity, percentage, maxQuantity, maxDiscountedUnits } =
+      candidate;
 
     if (
-      typeof minQuantity !== 'number' ||
+      typeof minQuantity !== "number" ||
       !Number.isInteger(minQuantity) ||
       minQuantity < 1
     ) {
@@ -93,9 +96,9 @@ function validQuantityTiers(tiers: unknown[]): QuantityTier[] {
     valid.push({
       minQuantity,
       percentage,
-      maxQuantity: typeof maxQuantity === 'number' ? maxQuantity : null,
+      maxQuantity: typeof maxQuantity === "number" ? maxQuantity : null,
       maxDiscountedUnits:
-        typeof maxDiscountedUnits === 'number' ? maxDiscountedUnits : null,
+        typeof maxDiscountedUnits === "number" ? maxDiscountedUnits : null,
     });
   }
 
@@ -106,13 +109,13 @@ function validOrderTiers(tiers: unknown[]): OrderTier[] {
   const valid: OrderTier[] = [];
 
   for (const tier of tiers) {
-    if (typeof tier !== 'object' || tier === null) continue;
+    if (typeof tier !== "object" || tier === null) continue;
 
     const candidate = tier as Record<string, unknown>;
-    const {minSubtotal, percentage} = candidate;
+    const { minSubtotal, percentage } = candidate;
 
     if (
-      typeof minSubtotal !== 'number' ||
+      typeof minSubtotal !== "number" ||
       !Number.isFinite(minSubtotal) ||
       minSubtotal <= 0
     ) {
@@ -121,7 +124,7 @@ function validOrderTiers(tiers: unknown[]): OrderTier[] {
 
     if (!isPercentage(percentage)) continue;
 
-    valid.push({minSubtotal, percentage});
+    valid.push({ minSubtotal, percentage });
   }
 
   return valid;
@@ -138,13 +141,13 @@ function isCustomerEligible(
   rule: CustomerEligibility | null | undefined,
 ): boolean {
   switch (rule) {
-    case 'signedIn':
+    case "signedIn":
       return buyerIdentity?.isAuthenticated === true;
-    case 'firstOrder': {
+    case "firstOrder": {
       const customer = buyerIdentity?.customer;
       return !!customer && customer.numberOfOrders === 0;
     }
-    case 'returning': {
+    case "returning": {
       const customer = buyerIdentity?.customer;
       return !!customer && customer.numberOfOrders > 0;
     }
@@ -163,16 +166,16 @@ function isEligible(line: Line, appliesTo: AppliesTo | null | undefined) {
 
   // Anything that is not a product variant, such as a custom line item, has no
   // product to match against.
-  if (merchandise.__typename !== 'ProductVariant') {
-    return !appliesTo || !appliesTo.type || appliesTo.type === 'all';
+  if (merchandise.__typename !== "ProductVariant") {
+    return !appliesTo || !appliesTo.type || appliesTo.type === "all";
   }
 
   switch (appliesTo?.type) {
-    case 'products': {
+    case "products": {
       const ids = appliesTo.productIds;
       return Array.isArray(ids) && ids.includes(merchandise.product.id);
     }
-    case 'collections':
+    case "collections":
       return merchandise.product.inSelectedCollection;
     default:
       return true;
@@ -247,7 +250,7 @@ function buildTargets(
   maxDiscountedUnits: number | null | undefined,
 ): ProductDiscountCandidateTarget[] {
   if (maxDiscountedUnits === null || maxDiscountedUnits === undefined) {
-    return lines.map((line) => ({cartLine: {id: line.id}}));
+    return lines.map((line) => ({ cartLine: { id: line.id } }));
   }
 
   const targets: ProductDiscountCandidateTarget[] = [];
@@ -257,7 +260,7 @@ function buildTargets(
     if (remaining <= 0) break;
 
     const quantity = Math.min(remaining, line.quantity);
-    targets.push({cartLine: {id: line.id, quantity}});
+    targets.push({ cartLine: { id: line.id, quantity } });
     remaining -= quantity;
   }
 
@@ -273,7 +276,9 @@ function runQuantityTiers(
     return [];
   }
 
-  const tiers = validQuantityTiers(config.tiers ?? []);
+  const tiers = validQuantityTiers(
+    Array.isArray(config.tiers) ? config.tiers : [],
+  );
   if (!tiers.length) return [];
 
   // Only the lines this discount targets count toward the quantity, and only
@@ -301,7 +306,7 @@ function runQuantityTiers(
           {
             message: `${tier.percentage}% OFF`,
             targets,
-            value: {percentage: {value: String(tier.percentage)}},
+            value: { percentage: { value: String(tier.percentage) } },
           },
         ],
         selectionStrategy: ProductDiscountSelectionStrategy.First,
@@ -326,7 +331,9 @@ function runOrderThreshold(
     return [];
   }
 
-  const tiers = validOrderTiers(config.tiers ?? []);
+  const tiers = validOrderTiers(
+    Array.isArray(config.tiers) ? config.tiers : [],
+  );
   if (!tiers.length) return [];
 
   const presentmentSubtotal = Number(input.cart.cost.subtotalAmount.amount);
@@ -347,8 +354,8 @@ function runOrderThreshold(
         candidates: [
           {
             message: `${tier.percentage}% OFF YOUR ORDER`,
-            targets: [{orderSubtotal: {excludedCartLineIds: []}}],
-            value: {percentage: {value: String(tier.percentage)}},
+            targets: [{ orderSubtotal: { excludedCartLineIds: [] } }],
+            value: { percentage: { value: String(tier.percentage) } },
           },
         ],
         selectionStrategy: OrderDiscountSelectionStrategy.First,
@@ -362,28 +369,41 @@ export function cartLinesDiscountsGenerateRun(
 ): CartLinesDiscountsGenerateRunResult {
   // Shared guards: an empty cart, a discount with no configuration, and a
   // buyer who does not meet the customer rule all produce no operations,
-  // whatever the discount type is.
+  // whatever the discount type is. Each kind checks its own settings, since
+  // they differ: tiers for the first two kinds, buy and get for the third.
   if (!input.cart.lines.length) return NOTHING;
 
   const config = input.discount.metafield?.jsonValue as
-    | TierConfig
-    | null
-    | undefined;
+    TierConfig | null | undefined;
 
-  if (!config || !Array.isArray(config.tiers) || config.tiers.length === 0) {
+  if (!config || typeof config !== "object" || Array.isArray(config)) {
     return NOTHING;
   }
 
-  if (!isCustomerEligible(input.cart.buyerIdentity, config.customerEligibility)) {
+  if (
+    !isCustomerEligible(input.cart.buyerIdentity, config.customerEligibility)
+  ) {
     return NOTHING;
   }
 
-  // A config written before order thresholds existed has no type at all, and
-  // every one of those is a quantity tier discount.
-  const operations =
-    config.type === 'order_threshold'
-      ? runOrderThreshold(input, config)
-      : runQuantityTiers(input, config);
+  return { operations: runForType(input, config) };
+}
 
-  return {operations};
+/**
+ * One branch per kind of discount. A config written before order thresholds
+ * existed has no type at all, and every one of those is a quantity tier
+ * discount, which is why that is the fallback.
+ */
+function runForType(input: CartInput, config: TierConfig): CartOperation[] {
+  switch (config.type) {
+    case "order_threshold":
+      return runOrderThreshold(input, config);
+    case "buy_x_get_y":
+      // Buy X Get Y discounts products, so it acts only with that class on.
+      return input.discount.discountClasses.includes(DiscountClass.Product)
+        ? runBuyXGetY(input, config)
+        : [];
+    default:
+      return runQuantityTiers(input, config);
+  }
 }

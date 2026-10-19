@@ -1,4 +1,8 @@
-query CartInput($collectionIds: [ID!] = []) {
+query CartInput(
+  $collectionIds: [ID!] = []
+  $buyCollectionIds: [ID!] = []
+  $getCollectionIds: [ID!] = []
+) {
   cart {
     buyerIdentity {
       isAuthenticated
@@ -14,6 +18,11 @@ query CartInput($collectionIds: [ID!] = []) {
     lines {
       id
       quantity
+      cost {
+        amountPerQuantity {
+          amount
+        }
+      }
       merchandise {
         __typename
         ... on ProductVariant {
@@ -21,6 +30,8 @@ query CartInput($collectionIds: [ID!] = []) {
           product {
             id
             inSelectedCollection: inAnyCollection(ids: $collectionIds)
+            inBuyCollection: inAnyCollection(ids: $buyCollectionIds)
+            inGetCollection: inAnyCollection(ids: $getCollectionIds)
           }
         }
       }

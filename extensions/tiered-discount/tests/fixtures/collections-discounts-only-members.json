@@ -19,7 +19,14 @@
               "id": "gid://shopify/ProductVariant/100",
               "product": {
                 "id": "gid://shopify/Product/200",
-                "inSelectedCollection": true
+                "inSelectedCollection": true,
+                "inBuyCollection": false,
+                "inGetCollection": false
+              }
+            },
+            "cost": {
+              "amountPerQuantity": {
+                "amount": "25.0"
               }
             }
           },
@@ -31,7 +38,14 @@
               "id": "gid://shopify/ProductVariant/101",
               "product": {
                 "id": "gid://shopify/Product/201",
-                "inSelectedCollection": false
+                "inSelectedCollection": false,
+                "inBuyCollection": false,
+                "inGetCollection": false
+              }
+            },
+            "cost": {
+              "amountPerQuantity": {
+                "amount": "25.0"
               }
             }
           }
