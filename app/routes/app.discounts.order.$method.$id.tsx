@@ -33,11 +33,12 @@ import {
 } from "../lib/shop-time";
 import {
   getShopCurrencyCode,
+  discountEditPath,
   getShopTimezoneOffsetMinutes,
   getTieredDiscount,
   updateTieredDiscount,
 } from "../models/discounts.server";
-import { toDiscountGid } from "../lib/discount-id";
+import { discountTab, toDiscountGid } from "../lib/discount-id";
 
 export const loader = async ({ request, params }: LoaderFunctionArgs) => {
   const { admin, redirect } = await authenticate.admin(request);
@@ -59,11 +60,11 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
 
   const config = discount.config;
 
-  // A discount cannot change type, so a quantity tier discount reached through
-  // this tab belongs on the other one rather than being edited here with the
-  // wrong fields.
-  if (config.status === "ok" && config.type !== "order_threshold") {
-    throw redirect(`/app/discounts/quantity/${params.method}/${params.id}`);
+  // A discount cannot change type, so one of another kind reached through this
+  // tab is sent to its own tab. Editing it here would show the wrong fields,
+  // and saving would overwrite its settings with order thresholds.
+  if (discountTab(discount) !== "order") {
+    throw redirect(discountEditPath(discount));
   }
 
   const orderTiers =
