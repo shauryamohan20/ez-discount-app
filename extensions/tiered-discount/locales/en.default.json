@@ -1,4 +1,4 @@
 {
-  "name": "Quantity Based Discount",
-  "description": "Takes a percentage off the cart based on how many items the customer buys."
+  "name": "EZ Master Discount",
+  "description": "Quantity tiers, whole order discounts and Buy X Get Y offers."
 }

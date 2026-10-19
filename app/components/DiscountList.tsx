@@ -4,6 +4,7 @@ import { useAppBridge } from "@shopify/app-bridge-react";
 
 import type { TieredDiscount } from "../models/discounts.server";
 import { DiscountTable } from "./DiscountTable";
+import { APP_NAME } from "../lib/brand";
 
 const TOAST_MESSAGES: Record<string, string> = {
   created: "Discount created",
@@ -59,7 +60,7 @@ export function DiscountList({
     // Full width, so the table uses all the space the admin gives the app.
     <s-page heading={heading} inlineSize="large">
       <s-link slot="breadcrumb-actions" href="/app">
-        EZ Discounts
+        {APP_NAME}
       </s-link>
 
       <s-button slot="primary-action" variant="primary" href={newHref}>

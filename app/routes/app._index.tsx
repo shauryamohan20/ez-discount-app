@@ -7,6 +7,7 @@ import { useLoaderData, useRouteError } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 
 import { authenticate } from "../shopify.server";
+import { APP_NAME, APP_WEBSITE_LABEL, APP_WEBSITE_URL } from "../lib/brand";
 import { DiscountTable } from "../components/DiscountTable";
 import {
   getBuyXGetYTitles,
@@ -108,7 +109,7 @@ export default function HomePage() {
     useLoaderData<typeof loader>();
 
   return (
-    <s-page heading="EZ Discounts" inlineSize="large">
+    <s-page heading={APP_NAME} inlineSize="large">
       <s-button
         slot="primary-action"
         variant="primary"
@@ -188,6 +189,16 @@ export default function HomePage() {
           titles={titles}
         />
       )}
+
+      <s-section>
+        <s-paragraph>
+          Guides, help and updates at{" "}
+          <s-link href={APP_WEBSITE_URL} target="_blank">
+            {APP_WEBSITE_LABEL}
+          </s-link>
+          .
+        </s-paragraph>
+      </s-section>
     </s-page>
   );
 }

@@ -3,6 +3,7 @@ import { useRouteError } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 
 import { authenticate } from "../shopify.server";
+import { APP_NAME } from "../lib/brand";
 
 /**
  * One Function backs both kinds of discount, so anything that asks to create
@@ -20,7 +21,7 @@ export default function ChooseDiscountKindPage() {
   return (
     <s-page heading="Create a discount">
       <s-link slot="breadcrumb-actions" href="/app">
-        EZ Discounts
+        {APP_NAME}
       </s-link>
 
       <s-section heading="Quantity based discount">

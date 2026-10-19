@@ -3,6 +3,7 @@ import { isRouteErrorResponse, useRouteError } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 
 import { authenticate } from "../shopify.server";
+import { APP_NAME } from "../lib/brand";
 
 /**
  * Any address inside the app that matches no page, such as a removed page or a
@@ -26,7 +27,7 @@ function PageNotFound() {
           </s-paragraph>
           <s-stack direction="inline" gap="base">
             <s-button variant="primary" href="/app">
-              Go to EZ Discounts
+              Go to {APP_NAME}
             </s-button>
             <s-button href="/app/discounts/quantity">
               Quantity based discounts

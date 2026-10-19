@@ -1,3 +1,5 @@
+import { APP_NAME } from "../lib/brand";
+
 type Props = {
   /** Where the back link and button go, for example a discount tab. */
   backHref?: string;
@@ -11,7 +13,7 @@ type Props = {
  */
 export function DiscountNotFound({
   backHref = "/app",
-  backLabel = "Back to EZ Discounts",
+  backLabel = `Back to ${APP_NAME}`,
 }: Props) {
   return (
     <s-page heading="Discount not found">
