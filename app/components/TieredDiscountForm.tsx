@@ -139,7 +139,7 @@ export function TieredDiscountForm({
     // not contain any (no minmax).
     <s-query-container>
       <s-grid
-        gridTemplateColumns="@container (inline-size > 900px) 2fr 1fr, 1fr"
+        gridTemplateColumns="@container (inline-size > 1100px) 1fr 1fr, 1fr"
         gap="base"
         alignItems="start"
       >

@@ -249,9 +249,10 @@ order thresholds.
   to, customers, tiers or thresholds). Renders `BuyXGetYFields` for that kind.
 - `BuyXGetYFields.tsx`, `ResourceSelector.tsx` (Shopify resource picker).
 - `DiscountPreviewPanel.tsx`: the live preview beside the form.
-  `TieredDiscountForm` lays the form and the panel out in an `s-grid` (two
-  thirds and one third, one column under 900px of container width); the panel
-  is sticky while the form scrolls. `s-page`'s `aside` slot is not used, because
+  `TieredDiscountForm` lays the form and the panel out in an `s-grid` (equal
+  halves, one column under 1100px of container width); the panel is sticky
+  while the form scrolls. Inside the panel, details and the cart sit side by
+  side above 640px of panel width, with "What happens" below both. `s-page`'s `aside` slot is not used, because
   it only exists at the default page width. A demo cart with quantity
   buttons, a shopper picker (guest, new, returning), totals with shipping, and
   "What happens" sentences, a reset button. Every kind of discount.
