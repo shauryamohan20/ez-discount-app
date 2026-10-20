@@ -12,6 +12,13 @@ description = "t:description"
   input_query = "src/cart_lines_discounts_generate_run.graphql"
   export = "cart-lines-discounts-generate-run"
 
+  # Free shipping for whole order thresholds. Shopify runs it only for
+  # discounts saved with the SHIPPING class.
+  [[extensions.targeting]]
+  target = "cart.delivery-options.discounts.generate.run"
+  input_query = "src/cart_delivery_options_discounts_generate_run.graphql"
+  export = "cart-delivery-options-discounts-generate-run"
+
   [extensions.build]
   command = ""
   path = "dist/function.wasm"

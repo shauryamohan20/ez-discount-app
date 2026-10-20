@@ -1,0 +1,46 @@
+{
+  "payload": {
+    "export": "cart-delivery-options-discounts-generate-run",
+    "target": "cart.delivery-options.discounts.generate.run",
+    "input": {
+      "cart": {
+        "buyerIdentity": null,
+        "cost": {
+          "subtotalAmount": {
+            "amount": "60.00"
+          }
+        },
+        "deliveryGroups": [
+          {
+            "deliveryOptions": [
+              {
+                "handle": "standard"
+              },
+              {
+                "handle": "express"
+              }
+            ]
+          },
+          {
+            "deliveryOptions": [
+              {
+                "handle": "local"
+              }
+            ]
+          }
+        ]
+      },
+      "presentmentCurrencyRate": "1.0",
+      "discount": {
+        "discountClasses": [
+          "ORDER",
+          "SHIPPING"
+        ],
+        "metafield": null
+      }
+    },
+    "output": {
+      "operations": []
+    }
+  }
+}

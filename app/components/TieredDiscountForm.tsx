@@ -424,7 +424,7 @@ export function TieredDiscountForm({
           <s-stack direction="block" gap="base">
             <s-paragraph>
               {isOrderThreshold
-                ? `Each threshold is a cart subtotal. The highest one the order reaches decides the percentage off. Amounts are in ${
+                ? `Each threshold is a cart subtotal. The highest percentage among the thresholds the order reaches applies, and free shipping applies once the order reaches any threshold that gives it. Amounts are in ${
                     currencyCode || "your store's currency"
                   }.`
                 : "Each tier covers a range of quantities, counting only the items this discount applies to. Leave the to quantity empty for no upper limit, or set it to the same number as the from quantity to match an exact quantity. Ranges cannot overlap."}
@@ -447,55 +447,72 @@ export function TieredDiscountForm({
                     borderWidth="base"
                     borderRadius="base"
                   >
-                    <s-stack
-                      direction="inline"
-                      gap="base"
-                      alignItems="start"
-                      justifyContent="space-between"
-                    >
-                      <s-number-field
-                        label="Spend at least"
-                        value={tier.minSubtotal}
-                        min={0}
-                        step={1}
-                        {...(currencyCode ? { suffix: currencyCode } : {})}
-                        {...(tierErrors.minSubtotal
-                          ? { error: tierErrors.minSubtotal }
-                          : {})}
-                        {...(disabled ? { disabled: true } : {})}
-                        onInput={(event) =>
-                          updateOrderTier(index, {
-                            minSubtotal: event.currentTarget.value,
-                          })
-                        }
-                      />
-                      <s-number-field
-                        label="Percentage off"
-                        value={tier.percentage}
-                        min={0}
-                        max={100}
-                        suffix="%"
-                        {...(tierErrors.percentage
-                          ? { error: tierErrors.percentage }
-                          : {})}
-                        {...(disabled ? { disabled: true } : {})}
-                        onInput={(event) =>
-                          updateOrderTier(index, {
-                            percentage: event.currentTarget.value,
-                          })
-                        }
-                      />
-                      <s-button
-                        variant="tertiary"
-                        tone="critical"
-                        accessibilityLabel={`Remove threshold ${index + 1}`}
-                        {...(disabled || values.orderTiers.length === 1
-                          ? { disabled: true }
-                          : {})}
-                        onClick={() => removeOrderTier(index)}
+                    <s-stack direction="block" gap="base">
+                      <s-stack
+                        direction="inline"
+                        gap="base"
+                        alignItems="start"
+                        justifyContent="space-between"
                       >
-                        Remove
-                      </s-button>
+                        <s-number-field
+                          label="Spend at least"
+                          value={tier.minSubtotal}
+                          min={0}
+                          step={1}
+                          {...(currencyCode ? { suffix: currencyCode } : {})}
+                          {...(tierErrors.minSubtotal
+                            ? { error: tierErrors.minSubtotal }
+                            : {})}
+                          {...(disabled ? { disabled: true } : {})}
+                          onInput={(event) =>
+                            updateOrderTier(index, {
+                              minSubtotal: event.currentTarget.value,
+                            })
+                          }
+                        />
+                        <s-number-field
+                          label="Percentage off"
+                          value={tier.percentage}
+                          min={0}
+                          max={100}
+                          suffix="%"
+                          {...(tier.freeShipping
+                            ? { details: "0 or empty for free shipping only" }
+                            : {})}
+                          {...(tierErrors.percentage
+                            ? { error: tierErrors.percentage }
+                            : {})}
+                          {...(disabled ? { disabled: true } : {})}
+                          onInput={(event) =>
+                            updateOrderTier(index, {
+                              percentage: event.currentTarget.value,
+                            })
+                          }
+                        />
+                        <s-button
+                          variant="tertiary"
+                          tone="critical"
+                          accessibilityLabel={`Remove threshold ${index + 1}`}
+                          {...(disabled || values.orderTiers.length === 1
+                            ? { disabled: true }
+                            : {})}
+                          onClick={() => removeOrderTier(index)}
+                        >
+                          Remove
+                        </s-button>
+                      </s-stack>
+
+                      <s-checkbox
+                        label="Also give free shipping"
+                        checked={tier.freeShipping}
+                        details="Every shipping option at checkout becomes free."
+                        {...(disabled ? { disabled: true } : {})}
+                        onChange={(event) =>
+                          updateOrderTier(index, {
+                            freeShipping: event.currentTarget.checked,
+                          })
+                        }
+                      />
                     </s-stack>
                   </s-box>
                 );

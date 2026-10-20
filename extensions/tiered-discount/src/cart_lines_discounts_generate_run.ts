@@ -8,6 +8,17 @@ import {
   ProductDiscountCandidateTarget,
 } from "../generated/api";
 import { runBuyXGetY } from "./buy_x_get_y";
+import {
+  orderThresholdOutcome,
+  shopSubtotalCents,
+  validOrderTiers,
+} from "./order_threshold";
+import {
+  isCustomerEligible,
+  isPercentage,
+  readConfig,
+  type CustomerEligibility,
+} from "./shared";
 
 /**
  * Written by the app into the `$app:tiered` / `config` metafield.
@@ -16,6 +27,7 @@ import { runBuyXGetY } from "./buy_x_get_y";
  * ended. Version 2 added maxQuantity and maxDiscountedUnits. Version 3 added
  * appliesTo. Version 4 added customerEligibility. Version 5 added type.
  * Version 6 added the buy_x_get_y type, whose settings live in buy_x_get_y.ts.
+ * Version 7 added freeShipping to order thresholds (see order_threshold.ts).
  *
  * Every added field is optional here, so a config written by any earlier
  * version of the app still behaves the way it did then. In particular a
@@ -31,17 +43,10 @@ type QuantityTier = {
   maxDiscountedUnits?: number | null;
 };
 
-type OrderTier = {
-  minSubtotal: number;
-  percentage: number;
-};
-
 type AppliesTo = {
   type?: "all" | "products" | "collections";
   productIds?: string[] | null;
 };
-
-type CustomerEligibility = "all" | "signedIn" | "firstOrder" | "returning";
 
 type TierConfig = {
   type?: DiscountType | null;
@@ -51,23 +56,8 @@ type TierConfig = {
 };
 
 type Line = CartInput["cart"]["lines"][number];
-type BuyerIdentity = CartInput["cart"]["buyerIdentity"];
 
 const NOTHING: CartLinesDiscountsGenerateRunResult = { operations: [] };
-
-/** Money is compared in whole cents so 99.99 and 100.00 never drift. */
-function toCents(amount: number): number {
-  return Math.round(amount * 100);
-}
-
-function isPercentage(value: unknown): value is number {
-  return (
-    typeof value === "number" &&
-    Number.isFinite(value) &&
-    value > 0 &&
-    value <= 100
-  );
-}
 
 /**
  * A malformed tier is skipped rather than thrown on. A config can be written
@@ -103,57 +93,6 @@ function validQuantityTiers(tiers: unknown[]): QuantityTier[] {
   }
 
   return valid;
-}
-
-function validOrderTiers(tiers: unknown[]): OrderTier[] {
-  const valid: OrderTier[] = [];
-
-  for (const tier of tiers) {
-    if (typeof tier !== "object" || tier === null) continue;
-
-    const candidate = tier as Record<string, unknown>;
-    const { minSubtotal, percentage } = candidate;
-
-    if (
-      typeof minSubtotal !== "number" ||
-      !Number.isFinite(minSubtotal) ||
-      minSubtotal <= 0
-    ) {
-      continue;
-    }
-
-    if (!isPercentage(percentage)) continue;
-
-    valid.push({ minSubtotal, percentage });
-  }
-
-  return valid;
-}
-
-/**
- * A cart with no identified customer cannot satisfy any rule that depends on
- * who the buyer is. That is not an edge case: an automatic discount runs on
- * anonymous carts too, and such a cart has no order history to read, so a
- * first order discount simply does not apply until the buyer is known.
- */
-function isCustomerEligible(
-  buyerIdentity: BuyerIdentity,
-  rule: CustomerEligibility | null | undefined,
-): boolean {
-  switch (rule) {
-    case "signedIn":
-      return buyerIdentity?.isAuthenticated === true;
-    case "firstOrder": {
-      const customer = buyerIdentity?.customer;
-      return !!customer && customer.numberOfOrders === 0;
-    }
-    case "returning": {
-      const customer = buyerIdentity?.customer;
-      return !!customer && customer.numberOfOrders > 0;
-    }
-    default:
-      return true;
-  }
 }
 
 /**
@@ -209,29 +148,6 @@ function bestQuantityTier(
       tier.percentage > best.percentage ||
       (tier.percentage === best.percentage &&
         tier.minQuantity > best.minQuantity)
-    ) {
-      best = tier;
-    }
-  }
-
-  return best;
-}
-
-/** The highest threshold the subtotal has reached. */
-function bestOrderTier(
-  tiers: OrderTier[],
-  subtotalCents: number,
-): OrderTier | null {
-  let best: OrderTier | null = null;
-
-  for (const tier of tiers) {
-    if (subtotalCents < toCents(tier.minSubtotal)) continue;
-
-    if (
-      best === null ||
-      tier.percentage > best.percentage ||
-      (tier.percentage === best.percentage &&
-        tier.minSubtotal > best.minSubtotal)
     ) {
       best = tier;
     }
@@ -316,12 +232,9 @@ function runQuantityTiers(
 }
 
 /**
- * A percentage off the whole order once the subtotal reaches a threshold.
- *
- * The cart subtotal is in the buyer's presentment currency, so it is converted
- * back to the shop's currency before being compared. Thresholds are entered in
- * the shop's currency and therefore mean the same amount of value to every
- * buyer, whatever they are paying in.
+ * A percentage off the whole order once the subtotal reaches a threshold. A
+ * threshold that only gives free shipping has a percentage of 0, which adds
+ * nothing here; the delivery options target handles the shipping.
  */
 function runOrderThreshold(
   input: CartInput,
@@ -331,31 +244,26 @@ function runOrderThreshold(
     return [];
   }
 
-  const tiers = validOrderTiers(
-    Array.isArray(config.tiers) ? config.tiers : [],
-  );
+  const tiers = validOrderTiers(config.tiers);
   if (!tiers.length) return [];
 
-  const presentmentSubtotal = Number(input.cart.cost.subtotalAmount.amount);
-  if (!Number.isFinite(presentmentSubtotal)) return [];
+  const subtotalCents = shopSubtotalCents(
+    input.cart.cost.subtotalAmount.amount,
+    input.presentmentCurrencyRate,
+  );
+  if (subtotalCents === null) return [];
 
-  const rate = Number(input.presentmentCurrencyRate);
-  const shopSubtotal =
-    Number.isFinite(rate) && rate > 0
-      ? presentmentSubtotal / rate
-      : presentmentSubtotal;
-
-  const tier = bestOrderTier(tiers, toCents(shopSubtotal));
-  if (!tier) return [];
+  const { percentage } = orderThresholdOutcome(tiers, subtotalCents);
+  if (percentage <= 0) return [];
 
   return [
     {
       orderDiscountsAdd: {
         candidates: [
           {
-            message: `${tier.percentage}% OFF YOUR ORDER`,
+            message: `${percentage}% OFF YOUR ORDER`,
             targets: [{ orderSubtotal: { excludedCartLineIds: [] } }],
-            value: { percentage: { value: String(tier.percentage) } },
+            value: { percentage: { value: String(percentage) } },
           },
         ],
         selectionStrategy: OrderDiscountSelectionStrategy.First,
@@ -373,12 +281,9 @@ export function cartLinesDiscountsGenerateRun(
   // they differ: tiers for the first two kinds, buy and get for the third.
   if (!input.cart.lines.length) return NOTHING;
 
-  const config = input.discount.metafield?.jsonValue as
-    TierConfig | null | undefined;
-
-  if (!config || typeof config !== "object" || Array.isArray(config)) {
-    return NOTHING;
-  }
+  const config = readConfig(input.discount.metafield?.jsonValue) as
+    TierConfig | null;
+  if (!config) return NOTHING;
 
   if (
     !isCustomerEligible(input.cart.buyerIdentity, config.customerEligibility)

@@ -53,13 +53,19 @@ const {
 const functionRunnerPath = findFunctionRunner();
 const schemaPath = path.join(extensionDir, "schema.graphql");
 const wasmPath = path.join(extensionDir, "dist/function.wasm");
-const queryPath = path.join(
-  extensionDir,
-  "src/cart_lines_discounts_generate_run.graphql",
-);
+// Each fixture names its target; this maps it to that target's input query.
+const queryPaths = {
+  "cart.lines.discounts.generate.run": path.join(
+    extensionDir,
+    "src/cart_lines_discounts_generate_run.graphql",
+  ),
+  "cart.delivery-options.discounts.generate.run": path.join(
+    extensionDir,
+    "src/cart_delivery_options_discounts_generate_run.graphql",
+  ),
+};
 
 const schema = await loadSchema(schemaPath);
-const inputQueryAST = await loadInputQuery(queryPath);
 
 // Matches vitest's toEqual, which ignores undefined properties.
 const normalise = (value) => JSON.parse(JSON.stringify(value ?? null));
@@ -79,6 +85,12 @@ for (const file of files) {
 
   try {
     const fixture = await loadFixture(path.join(fixturesDir, file));
+    const queryPath = queryPaths[fixture.target];
+    if (!queryPath) {
+      failures.push(`${name}: unknown target ${fixture.target}`);
+      continue;
+    }
+    const inputQueryAST = await loadInputQuery(queryPath);
     const validation = await validateTestAssets({
       schema,
       fixture,

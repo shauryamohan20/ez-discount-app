@@ -1,0 +1,56 @@
+{
+  "payload": {
+    "export": "cart-delivery-options-discounts-generate-run",
+    "target": "cart.delivery-options.discounts.generate.run",
+    "input": {
+      "cart": {
+        "buyerIdentity": null,
+        "cost": {
+          "subtotalAmount": {
+            "amount": "60.00"
+          }
+        },
+        "deliveryGroups": []
+      },
+      "presentmentCurrencyRate": "1.0",
+      "discount": {
+        "discountClasses": [
+          "ORDER",
+          "SHIPPING"
+        ],
+        "metafield": {
+          "jsonValue": {
+            "version": 7,
+            "type": "order_threshold",
+            "tiers": [
+              {
+                "minSubtotal": 50,
+                "percentage": 0,
+                "freeShipping": true
+              },
+              {
+                "minSubtotal": 100,
+                "percentage": 10,
+                "freeShipping": false
+              },
+              {
+                "minSubtotal": 200,
+                "percentage": 15,
+                "freeShipping": true
+              }
+            ],
+            "appliesTo": {
+              "type": "all",
+              "productIds": [],
+              "collectionIds": []
+            },
+            "customerEligibility": "all"
+          }
+        }
+      }
+    },
+    "output": {
+      "operations": []
+    }
+  }
+}

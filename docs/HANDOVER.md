@@ -83,9 +83,14 @@ own tab in the app:
 - Applies to all products, specific products, or specific collections. Only
   matching items count toward the quantity, and only they are discounted.
 
-**Whole order** (`order_threshold`, ORDER class)
-- Percentage off the order once the subtotal reaches a threshold. The highest
-  threshold reached wins.
+**Whole order** (`order_threshold`, ORDER class, plus SHIPPING when needed)
+- Percentage off the order once the subtotal reaches a threshold. The best
+  percentage among the reached thresholds applies.
+- Each threshold can also give free shipping (every delivery option 100% off).
+  A threshold may be free shipping only, with a percentage of 0. Free shipping
+  applies once the cart reaches any threshold that gives it, so spending more
+  never takes it away. The discount is saved with the SHIPPING class only
+  while at least one threshold gives free shipping.
 - Thresholds are in the shop's currency. The buyer's subtotal is divided by
   `presentmentCurrencyRate` first, and money is compared in whole cents.
 - Compared against the subtotal before shipping and taxes.
@@ -125,13 +130,19 @@ own tab in the app:
 
 ### 5.1 The Function: `extensions/tiered-discount`
 
-- Handle `tiered-discount`, single target `cart.lines.discounts.generate.run`.
+- Handle `tiered-discount`, two targets: `cart.lines.discounts.generate.run`
+  (every kind) and `cart.delivery-options.discounts.generate.run` (free
+  shipping for whole order thresholds; Shopify only runs it for discounts with
+  the SHIPPING class).
   **Never rename the handle or the metafield namespace**: every saved discount
   stores the handle as `functionHandle`, and its settings live in `$app:tiered`.
 - `src/cart_lines_discounts_generate_run.ts`: shared guards (empty cart, no
   config, customer rule), then `runForType` dispatches on `config.type`:
   `order_threshold`, `buy_x_get_y`, otherwise quantity tiers. A missing type
   means quantity tiers.
+- `src/cart_delivery_options_discounts_generate_run.ts` and its `.graphql`:
+  the shipping target. `src/order_threshold.ts` holds the threshold rules both
+  targets share; `src/shared.ts` holds customer rules and money helpers.
 - `src/buy_x_get_y.ts`: Buy X Get Y as small pure functions. Works on cart
   lines, not individual units, so a line of 500 does not create 500 objects
   inside the instruction budget. The number of applications is the smallest of
@@ -158,7 +169,7 @@ own tab in the app:
 
 Namespace `$app:tiered`, both of type `json`, written in the same mutation.
 
-`config`, version 6. Older versions still load and behave as they did; the app
+`config`, version 7. Older versions still load and behave as they did; the app
 refuses to edit a version newer than it knows.
 
 ```json
@@ -169,8 +180,9 @@ refuses to edit a version newer than it knows.
 ```
 
 ```json
-{"version":6,"type":"order_threshold",
- "tiers":[{"minSubtotal":100,"percentage":10},{"minSubtotal":200,"percentage":15}],
+{"version":7,"type":"order_threshold",
+ "tiers":[{"minSubtotal":50,"percentage":0,"freeShipping":true},
+          {"minSubtotal":100,"percentage":10,"freeShipping":true}],
  "appliesTo":{"type":"all","productIds":[],"collectionIds":[]},
  "customerEligibility":"all"}
 ```
@@ -192,7 +204,8 @@ refuses to edit a version newer than it knows.
 ```
 
 Version history: 1 tiers only; 2 maxQuantity and maxDiscountedUnits; 3
-appliesTo; 4 customerEligibility; 5 type; 6 buy_x_get_y.
+appliesTo; 4 customerEligibility; 5 type; 6 buy_x_get_y; 7 freeShipping on
+order thresholds.
 
 ### 5.3 The app
 
@@ -315,7 +328,7 @@ cd C:\Users\mohan\Desktop\ez-discount-app\ez-discount-app && pnpm run lint
 cd C:\Users\mohan\Desktop\ez-discount-app\ez-discount-app && pnpm run build
 ```
 
-Function tests, 79 fixtures, when the CLI works:
+Function tests, 97 fixtures, when the CLI works:
 
 ```bash
 cd C:\Users\mohan\Desktop\ez-discount-app\ez-discount-app\extensions\tiered-discount && pnpm test -- --run
@@ -342,7 +355,8 @@ cd C:\Users\mohan\Desktop\ez-discount-app\ez-discount-app && pnpm exec graphql-c
 ```
 
 Fixtures live in `extensions/tiered-discount/tests/fixtures`. Each must include
-every field the input query selects, or validation fails.
+every field its target's input query selects, or validation fails. Fixtures
+for the shipping target are named `shipping-*`.
 
 ---
 

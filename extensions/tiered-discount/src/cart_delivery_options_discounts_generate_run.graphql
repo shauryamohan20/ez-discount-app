@@ -1,0 +1,27 @@
+query DeliveryInput {
+  cart {
+    buyerIdentity {
+      isAuthenticated
+      customer {
+        numberOfOrders
+      }
+    }
+    cost {
+      subtotalAmount {
+        amount
+      }
+    }
+    deliveryGroups {
+      deliveryOptions {
+        handle
+      }
+    }
+  }
+  presentmentCurrencyRate
+  discount {
+    discountClasses
+    metafield(namespace: "$app:tiered", key: "config") {
+      jsonValue
+    }
+  }
+}

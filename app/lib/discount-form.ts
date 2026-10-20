@@ -39,6 +39,7 @@ export type ResourceRef = {
 export type OrderTierRowValues = {
   minSubtotal: string;
   percentage: string;
+  freeShipping: boolean;
 };
 
 export type OrderTierRowErrors = {
@@ -128,13 +129,14 @@ export const MAX_TITLE_LENGTH = 255;
 export const MAX_CODE_LENGTH = 255;
 
 export function emptyOrderTierRow(): OrderTierRowValues {
-  return { minSubtotal: "", percentage: "" };
+  return { minSubtotal: "", percentage: "", freeShipping: false };
 }
 
 export function orderTierToRow(tier: OrderTier): OrderTierRowValues {
   return {
     minSubtotal: String(tier.minSubtotal),
     percentage: String(tier.percentage),
+    freeShipping: tier.freeShipping,
   };
 }
 
@@ -185,7 +187,7 @@ export function blankDiscountForm(
         maxDiscountedUnits: "",
       },
     ],
-    orderTiers: [{ minSubtotal: "100", percentage: "10" }],
+    orderTiers: [{ minSubtotal: "100", percentage: "10", freeShipping: false }],
     bxgy: blankBxgyForm(),
   };
 }
@@ -362,11 +364,18 @@ export function validateDiscountForm(
         seenThresholds.add(minSubtotal);
       }
 
-      const percentage = parseNumber(row.percentage);
+      // An empty or 0 percentage is fine when the threshold gives free
+      // shipping: that is a free shipping only threshold.
+      const rawPercentage = parseNumber(row.percentage);
+      const percentage =
+        rawPercentage === null && row.freeShipping ? 0 : rawPercentage;
       if (percentage === null) {
         rowErrors.percentage = "Enter a percentage.";
-      } else if (percentage <= 0) {
-        rowErrors.percentage = "Use more than 0.";
+      } else if (percentage < 0) {
+        rowErrors.percentage = "Use 0 or more.";
+      } else if (percentage === 0 && !row.freeShipping) {
+        rowErrors.percentage =
+          "Use more than 0, or give this threshold free shipping.";
       } else if (percentage > 100) {
         rowErrors.percentage = "Use 100 or less.";
       }
@@ -378,7 +387,11 @@ export function validateDiscountForm(
 
       parsedOrderTiers.push({
         index,
-        tier: { minSubtotal: minSubtotal!, percentage: percentage! },
+        tier: {
+          minSubtotal: minSubtotal!,
+          percentage: percentage!,
+          freeShipping: row.freeShipping,
+        },
       });
     });
 
@@ -639,6 +652,7 @@ function orderTierRowsFromFormData(formData: FormData): OrderTierRowValues[] {
     return parsed.map((row) => ({
       minSubtotal: String(row?.minSubtotal ?? ""),
       percentage: String(row?.percentage ?? ""),
+      freeShipping: row?.freeShipping === true,
     }));
   } catch {
     return [];

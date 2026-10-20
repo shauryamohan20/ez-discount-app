@@ -31,6 +31,8 @@ export const DISCOUNT_FUNCTION_HANDLE = "tiered-discount";
  * 4: adds customerEligibility, which defaults to every customer.
  * 5: adds type, which defaults to quantity tiers.
  * 6: adds the buy_x_get_y type, which has buy and get settings, not tiers.
+ * 7: order thresholds gain freeShipping, and may have a percentage of 0 when
+ *    they give free shipping.
  *
  * Each added field is optional, so a config written by an earlier version
  * keeps the behaviour it had then and is rewritten at the current version the
@@ -38,7 +40,7 @@ export const DISCOUNT_FUNCTION_HANDLE = "tiered-discount";
  * Discounts saved by a newer version are reported as unsupported rather than
  * edited with the wrong assumptions.
  */
-export const TIER_CONFIG_VERSION = 6;
+export const TIER_CONFIG_VERSION = 7;
 
 export const MAX_TIERS = 10;
 
@@ -151,12 +153,24 @@ export const MAX_SCOPE_IDS = 100;
  */
 export const MAX_CONFIG_BYTES = 9_500;
 
-/** A percentage off the whole order once the subtotal reaches minSubtotal. */
+/**
+ * A percentage off the whole order once the subtotal reaches minSubtotal, and
+ * optionally free shipping. A percentage of 0 is allowed only with free
+ * shipping. The Function's copy of these rules is in
+ * extensions/tiered-discount/src/order_threshold.ts.
+ */
 export type OrderTier = {
   /** In the shop's currency, to at most two decimal places. */
   minSubtotal: number;
   percentage: number;
+  /** Absent in configs before version 7, which means false. */
+  freeShipping: boolean;
 };
+
+/** A discount needs Shopify's SHIPPING class only when it can give free shipping. */
+export function orderTiersGiveFreeShipping(tiers: OrderTier[]): boolean {
+  return tiers.some((tier) => tier.freeShipping);
+}
 
 type ConfigCommon = {
   status: "ok";
@@ -201,6 +215,7 @@ function normalizeOrderTier(value: unknown): OrderTier | null {
   if (!isRecord(value)) return null;
 
   const { minSubtotal, percentage } = value;
+  const freeShipping = value.freeShipping === true;
 
   if (
     typeof minSubtotal !== "number" ||
@@ -215,13 +230,14 @@ function normalizeOrderTier(value: unknown): OrderTier | null {
   if (
     typeof percentage !== "number" ||
     !Number.isFinite(percentage) ||
-    percentage <= 0 ||
-    percentage > 100
+    percentage < 0 ||
+    percentage > 100 ||
+    (percentage === 0 && !freeShipping)
   ) {
     return null;
   }
 
-  return { minSubtotal, percentage };
+  return { minSubtotal, percentage, freeShipping };
 }
 
 export function sortOrderTiers(tiers: OrderTier[]): OrderTier[] {
@@ -701,14 +717,27 @@ export function summarizeTiers(tiers: Tier[]): string {
     .join(", ");
 }
 
-/** "Spend 100+: 10% off, 200+: 15% off" */
+/** "10% off", "free shipping", "10% off and free shipping". */
+export function describeOrderReward(
+  percentage: number,
+  freeShipping: boolean,
+): string {
+  if (percentage > 0 && freeShipping) {
+    return `${percentage}% off and free shipping`;
+  }
+
+  return freeShipping ? "free shipping" : `${percentage}% off`;
+}
+
+/** "Spend 50+: free shipping, 100+: 10% off and free shipping" */
 export function summarizeOrderTiers(tiers: OrderTier[]): string {
   return sortOrderTiers(tiers)
-    .map((tier, index) =>
-      index === 0
-        ? `Spend ${formatThreshold(tier.minSubtotal)}+: ${tier.percentage}% off`
-        : `${formatThreshold(tier.minSubtotal)}+: ${tier.percentage}% off`,
-    )
+    .map((tier, index) => {
+      const reward = describeOrderReward(tier.percentage, tier.freeShipping);
+      const amount = `${formatThreshold(tier.minSubtotal)}+: ${reward}`;
+
+      return index === 0 ? `Spend ${amount}` : amount;
+    })
     .join(", ");
 }
 
