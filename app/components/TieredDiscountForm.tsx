@@ -2,6 +2,7 @@ import { useAppBridge } from "@shopify/app-bridge-react";
 
 import { isDiscountMethod } from "../lib/discount-id";
 import { BuyXGetYFields } from "./BuyXGetYFields";
+import { DiscountPreviewPanel } from "./DiscountPreviewPanel";
 import {
   MAX_CODE_LENGTH,
   MAX_TITLE_LENGTH,
@@ -640,6 +641,9 @@ export function TieredDiscountForm({
           </s-stack>
         </s-section>
       )}
+
+      {/* Rendered into the page's aside column through its slot. */}
+      <DiscountPreviewPanel values={values} currencyCode={currencyCode} />
     </>
   );
 }

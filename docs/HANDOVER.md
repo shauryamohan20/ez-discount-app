@@ -218,6 +218,14 @@ order thresholds.
 - `discount-id.ts`: gid helpers, `discountTab`, `discountPath`.
 - `shop-time.ts`: dates in the shop's time zone.
 - `brand.ts`: app name and website.
+- `preview.ts`: the live preview engine. Builds a Function input from a demo
+  cart, runs the **real Function code** (both targets) in the browser, and
+  reads the operations back as money.
+- `preview-explain.ts`: turns the half filled form into the config the app
+  would save (with the same serializer), and writes the plain English
+  explanations. Rows that would fail validation are skipped, not blocking.
+- `discountClassesFor` in `tiers.ts` decides the Shopify discount classes,
+  used both when saving and by the preview.
 
 **`app/models`** (server only)
 - `discounts.server.ts`: every Admin GraphQL call. List (`discountNodes`,
@@ -235,6 +243,11 @@ order thresholds.
 - `TieredDiscountForm.tsx`: the shared form shell (method, details, applies
   to, customers, tiers or thresholds). Renders `BuyXGetYFields` for that kind.
 - `BuyXGetYFields.tsx`, `ResourceSelector.tsx` (Shopify resource picker).
+- `DiscountPreviewPanel.tsx`: the live preview beside the form, rendered by
+  `TieredDiscountForm` into `s-page`'s `aside` slot, sticky while the form
+  scrolls; below the form on narrow screens. A demo cart with quantity
+  buttons, a shopper picker (guest, new, returning), totals with shipping, and
+  "What happens" sentences. Whole order discounts only so far.
 - `DiscountList.tsx` (a kind's page), `DiscountTable.tsx` (the shared table,
   row actions and confirmation dialog), `DiscountSummary.tsx` (the "What it
   does" cell for every kind), `DiscountNotFound.tsx`.
@@ -259,6 +272,9 @@ route exists and Shopify wants a session. A real missing route returns 404.
 
 ### 5.4 Rules the code relies on
 
+- **`extensions/tiered-discount/generated/api.ts` is committed** because the
+  app imports the Function code for the live preview. After changing a
+  Function `.graphql` file, regenerate it (section 7) and commit it.
 - **Browser code must not import values from `*.server.ts`.** Type only
   imports are fine. React Router strips server code only from `loader`,
   `action`, `middleware` and `headers`. Typecheck does not catch this; the

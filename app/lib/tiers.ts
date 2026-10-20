@@ -71,10 +71,7 @@ export const ALL_PRODUCTS: AppliesTo = {
 
 /** Who the discount is for. Evaluated by the Function, not by Shopify. */
 export type CustomerEligibility =
-  | "all"
-  | "signedIn"
-  | "firstOrder"
-  | "returning";
+  "all" | "signedIn" | "firstOrder" | "returning";
 
 export const CUSTOMER_ELIGIBILITY_LABELS: Record<CustomerEligibility, string> =
   {
@@ -170,6 +167,26 @@ export type OrderTier = {
 /** A discount needs Shopify's SHIPPING class only when it can give free shipping. */
 export function orderTiersGiveFreeShipping(tiers: OrderTier[]): boolean {
   return tiers.some((tier) => tier.freeShipping);
+}
+
+export type ShopifyDiscountClass = "ORDER" | "PRODUCT" | "SHIPPING";
+
+/**
+ * The classes decide which operations the Function is allowed to return and
+ * which of its targets Shopify runs. The main class follows the discount type.
+ * SHIPPING is added only while a threshold gives free shipping, so other
+ * discounts never run the delivery target. Used when saving and by the live
+ * preview, so the two always agree.
+ */
+export function discountClassesFor(
+  discountType: DiscountType,
+  orderTiers: OrderTier[],
+): ShopifyDiscountClass[] {
+  if (discountType !== "order_threshold") return ["PRODUCT"];
+
+  return orderTiersGiveFreeShipping(orderTiers)
+    ? ["ORDER", "SHIPPING"]
+    : ["ORDER"];
 }
 
 type ConfigCommon = {
@@ -331,7 +348,11 @@ function normalizeBuyXGetY(value: Record<string, unknown>): BuyXGetY | null {
   if (!isRecord(buyScope) || !isRecord(getScope)) return null;
 
   const buyKind = buyScope.kind;
-  if (buyKind !== "all" && buyKind !== "products" && buyKind !== "collections") {
+  if (
+    buyKind !== "all" &&
+    buyKind !== "products" &&
+    buyKind !== "collections"
+  ) {
     return null;
   }
 
@@ -396,7 +417,11 @@ export function parseTierConfig(jsonValue: unknown): TierConfig {
   const rawVersion = jsonValue.version;
   const version = rawVersion === undefined ? 1 : rawVersion;
 
-  if (typeof version !== "number" || !Number.isInteger(version) || version < 1) {
+  if (
+    typeof version !== "number" ||
+    !Number.isInteger(version) ||
+    version < 1
+  ) {
     return unsupported("The saved settings have an unrecognised version.");
   }
 

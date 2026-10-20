@@ -8,7 +8,7 @@ import {
   TIER_METAFIELD_TYPE,
   collectionVariablesForAppliesTo,
   collectionVariablesForBuyXGetY,
-  orderTiersGiveFreeShipping,
+  discountClassesFor,
   parseTierConfig,
   serializeBuyXGetYConfig,
   serializeInputVariables,
@@ -414,15 +414,7 @@ function toDiscountInput(input: TieredDiscountInput) {
     title: input.title,
     startsAt: input.startsAt,
     endsAt: input.endsAt,
-    // The classes decide which operations the Function is allowed to return
-    // and which of its targets Shopify runs. The main class follows the
-    // discount type. SHIPPING is added only while a threshold gives free
-    // shipping, so other discounts never run the delivery target.
-    discountClasses: isOrderThreshold
-      ? orderTiersGiveFreeShipping(input.orderTiers)
-        ? ["ORDER", "SHIPPING"]
-        : ["ORDER"]
-      : ["PRODUCT"],
+    discountClasses: discountClassesFor(input.discountType, input.orderTiers),
     combinesWith: {
       // A discount never stacks with others of its own class. The merchant
       // chooses whether it stacks with the other class.
