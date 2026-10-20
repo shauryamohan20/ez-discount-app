@@ -122,7 +122,7 @@ export function DiscountPreviewPanel({ values, currencyCode }: Props) {
 
   return (
     <div style={{ position: "sticky", top: "16px" }}>
-      <s-section heading="Live preview">
+      <s-section heading="Demo cart">
         <s-stack direction="block" gap="base">
           {/* Details on the left and the cart on the right when the panel is
               wide enough, one above the other when it is not. */}
