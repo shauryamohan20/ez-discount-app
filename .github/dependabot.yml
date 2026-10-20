@@ -1,0 +1,20 @@
+# Dependabot keeps the app's dependencies up to date and raises a pull request
+# when a security fix is published for one of them.
+# https://docs.github.com/en/code-security/dependabot/working-with-dependabot/dependabot-options-reference
+#
+# pnpm uses the "npm" ecosystem. The root pnpm-lock.yaml covers the whole
+# workspace, including extensions/tiered-discount.
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    # Minor and patch updates arrive as one pull request a week instead of one
+    # each. Major updates stay separate because they can need code changes.
+    groups:
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
+    open-pull-requests-limit: 5

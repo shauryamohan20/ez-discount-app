@@ -61,7 +61,7 @@ disagree, trust the code, then fix this file.
 | Function API version | 2026-07 (`extensions/tiered-discount/shopify.extension.toml`) |
 | Node / pnpm | Node 24.19.0, pnpm 11 |
 | Dev store | `greyteck-store` (Partner development store) |
-| Scopes | `write_products, write_metaobjects, write_metaobject_definitions, write_discounts` |
+| Scopes | `read_products, write_discounts` (narrowed after the app security check) |
 | Original test discount | `gid://shopify/DiscountAutomaticNode/1536741376237` (old untyped config, must keep working) |
 
 pnpm 11 ignores the `"pnpm"` block in `package.json`. Its settings live in
@@ -348,19 +348,19 @@ every field the input query selects, or validation fails.
 
 ## 8. Open problems in the environment
 
-**The global Shopify CLI is broken.** `shopify version` fails with
-`ERR_MODULE_NOT_FOUND`. Cause: the CLI updates itself in the background, and
-the update fails with EPERM because a running dev server holds
-`cloudflared.exe` open, leaving a half replaced install. The owner's last
-reinstall failed for the same reason. Fix, in this order:
+**The global Shopify CLI breaks itself when it auto-updates.** It is working
+again at 4.9.4, but `shopify config autoupgrade status` still says "on". The
+cause: the CLI updates itself in the background, the update fails with EPERM
+because a running dev server holds `cloudflared.exe` open, and the install is
+left half replaced (`shopify version` then fails with `ERR_MODULE_NOT_FOUND`).
+It broke three times this way. To stop it, run once:
 
-1. Stop the dev server with Ctrl+C.
-2. `npm install -g @shopify/cli@latest`
-3. `shopify config autoupgrade off` (stops it breaking itself again)
-4. `pnpm run dev`
+`shopify config autoupgrade off`
 
-An alternative that removes the problem for good is installing `@shopify/cli`
-as a project devDependency. It was proposed and not yet approved.
+If it is broken again: stop the dev server with Ctrl+C, run
+`npm install -g @shopify/cli@latest`, then the command above, then
+`pnpm run dev`. Installing `@shopify/cli` as a project devDependency would
+remove the problem for good; it was proposed and not yet approved.
 
 **"Error while polling app logs"** repeats in the dev terminal. Not diagnosed.
 The real error only appears with `shopify app dev --verbose`, in lines starting
@@ -370,11 +370,14 @@ The real error only appears with `shopify app dev --verbose`, in lines starting
 
 ## 9. Waiting on the owner
 
-- Fix the CLI and restart the dev server (section 8). Until then the admin
-  sidebar still shows the old name "ez-discount-app", because `shopify app dev`
-  applies `shopify.app.toml` changes when it starts.
-- Run `shopify app deploy` so the new name, the admin entry points and the
-  latest Function reach the live app.
+- Turn off CLI auto-upgrade (section 8).
+- Restart the dev server so `shopify app dev` applies the latest
+  `shopify.app.toml`: the new name in the admin sidebar, the narrower scopes
+  (the dev store asks to approve the app again), and the compliance webhooks.
+- Run `shopify app security check` again after the restart, then have Claude
+  re-record its agent findings, then `shopify app security review` (section 12).
+- Run `shopify app deploy` so the new name, scopes, compliance webhooks, admin
+  entry points and latest Function reach the live app.
 - Set the App Store listing name and support website in the Partner Dashboard.
   Nothing in the code controls those.
 - Test Buy X Get Y in the dev store with the checklist in section 11.
@@ -385,18 +388,16 @@ The real error only appears with `shopify app dev --verbose`, in lines starting
 
 From the owner's roadmap, in a sensible order:
 
-1. **App Store compliance:** the three mandatory GDPR webhooks
-   (`customers/data_request`, `customers/redact`, `shop/redact`). The
-   `app/uninstalled` webhook already deletes sessions.
-2. **Billing** with the App Subscriptions API: a monthly plan and a free trial.
-3. **Production database:** Prisma from SQLite to Postgres.
-4. **Deployment:** Fly.io, Render or Railway.
-5. **Cleanup of `shopify.app.toml`:** the template's `demo_info` product
-   metafield and `example` metaobject, and `application_url` /
-   `redirect_urls` still on `https://example.com` (the CLI overrides them
-   during dev). Removing a metaobject definition can delete merchant data on
-   deploy, so do it deliberately.
-6. **App Store listing:** assets and a submission checklist.
+1. **Billing** with the App Subscriptions API: a monthly plan and a free trial.
+2. **Production database:** Prisma from SQLite to Postgres.
+3. **Deployment:** Fly.io, Render or Railway. `application_url` and
+   `redirect_urls` in `shopify.app.toml` are still the `https://example.com`
+   placeholders (the CLI overrides them during dev) and need the real host.
+4. **App Store listing:** assets and a submission checklist.
+
+Done since the first draft of this list: the mandatory compliance webhooks
+(`app/routes/webhooks.compliance.tsx`), and removing the template's
+`demo_info` metafield and `example` metaobject from `shopify.app.toml`.
 
 Smaller items noted along the way:
 - Buy X Get Y `prerequisites` (section 6).
@@ -431,9 +432,40 @@ Confirm the quantity tier and whole order discounts still apply as before.
 
 ---
 
-## 12. History
+## 12. App security check
 
-27 commits on `main`, oldest first:
+Shopify CLI's local security review (`shopify app security ...`, CLI 4.9.x).
+Results live in `.shopify/app-security/shopify.app/`, which git ignores.
+
+First run, 20 October 2026: 3 checks with findings, 26 passed, 7 not
+applicable, none unresolved.
+
+| Check | Severity | Status |
+|---|---|---|
+| SCOPE_OVER_REQUEST (2 findings) | High | Fixed: scopes narrowed to `read_products,write_discounts` |
+| MISSING_COMPLIANCE_WEBHOOKS | Medium | Fixed: `compliance_topics` subscription and `app/routes/webhooks.compliance.tsx` |
+| MISSING_DEPENDENCY_SECURITY_AUTOMATION | Low | Fixed: `.github/dependabot.yml` |
+
+To re-run after changes:
+
+1. `shopify app security check` (scan only, quick).
+2. Claude reads `.shopify/app-security/shopify.app/agent-checks.json`, follows
+   every check's prompt, and writes one findings document. Last time it was
+   saved outside the repo at `C:\Users\mohan\Desktop\ez-discount-app\security-findings.json`.
+3. `shopify app security record < <findings file>` (replaces the previous agent
+   results; the whole document is validated or nothing is written).
+4. `shopify app security review` is the only official combined view.
+
+A hardening idea that is not a finding: the activate, deactivate, delete and
+save actions do not check that a discount belongs to this app before changing
+it. That stays inside the signed in merchant's own shop, so it crosses no
+security boundary, but `getTieredDiscount` before each mutation would close it.
+
+---
+
+## 13. History
+
+29 commits on `main`, oldest first:
 
 1. Template scaffold, then the first Function (quantity tiers).
 2. Admin UI: list, create, edit, activate, deactivate, delete.
@@ -445,5 +477,7 @@ Confirm the quantity tier and whole order discounts still apply as before.
 6. Buy X Get Y: Function, create page with preview, edit page, polish.
 7. Renamed to EZ Master Discount with the website linked; the login form
    removed from the root address.
+8. This handover document. Then fixes from the first app security check:
+   narrower scopes, the compliance webhooks, and Dependabot.
 
 `git log` has the reasoning for each change in its commit message.
