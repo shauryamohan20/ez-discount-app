@@ -646,6 +646,13 @@ export function describeSelection(
   ids: string[],
   titleOf?: (id: string) => string | undefined,
 ): string {
+  // Nothing picked yet, which a form being filled in can show.
+  if (ids.length === 0) {
+    return kind === "products"
+      ? "the products you choose"
+      : "the collections you choose";
+  }
+
   const names = titleOf
     ? ids.map(titleOf).filter((name): name is string => Boolean(name))
     : [];

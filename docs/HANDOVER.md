@@ -221,9 +221,14 @@ order thresholds.
 - `preview.ts`: the live preview engine. Builds a Function input from a demo
   cart, runs the **real Function code** (both targets) in the browser, and
   reads the operations back as money.
-- `preview-explain.ts`: turns the half filled form into the config the app
-  would save (with the same serializer), and writes the plain English
-  explanations. Rows that would fail validation are skipped, not blocking.
+- `preview-explain.ts`: `buildPreview` turns the half filled form into the
+  config the app would save (same serializers), the discount classes and a
+  demo cart; the `explain*` functions write the plain English sentences. Rows
+  that would fail validation are skipped, not blocking.
+- `preview-cart.ts`: the demo carts. Quantity tiers and Buy X Get Y use the
+  names of the picked products and collections next to an item that does not
+  qualify, starting at quantities where the discount applies. A side with
+  nothing picked uses a stand in, whose ID also goes into the preview config.
 - `discountClassesFor` in `tiers.ts` decides the Shopify discount classes,
   used both when saving and by the preview.
 
@@ -247,7 +252,7 @@ order thresholds.
   `TieredDiscountForm` into `s-page`'s `aside` slot, sticky while the form
   scrolls; below the form on narrow screens. A demo cart with quantity
   buttons, a shopper picker (guest, new, returning), totals with shipping, and
-  "What happens" sentences. Whole order discounts only so far.
+  "What happens" sentences, a reset button. Every kind of discount.
 - `DiscountList.tsx` (a kind's page), `DiscountTable.tsx` (the shared table,
   row actions and confirmation dialog), `DiscountSummary.tsx` (the "What it
   does" cell for every kind), `DiscountNotFound.tsx`.

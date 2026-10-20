@@ -11,9 +11,11 @@ import {
   type DemoShopper,
 } from "../lib/preview";
 import {
-  buildPreviewConfig,
+  buildPreview,
+  explainBuyXGetY,
   explainCommonOptions,
   explainOrderThresholds,
+  explainQuantityTiers,
 } from "../lib/preview-explain";
 import type { CustomerEligibility } from "../lib/tiers";
 
@@ -21,31 +23,6 @@ type Props = {
   values: DiscountFormValues;
   currencyCode: string;
 };
-
-/** A cart with no product targeting: three example items. */
-function wholeOrderCart(): DemoLine[] {
-  const line = (
-    id: string,
-    title: string,
-    unitPrice: number,
-    quantity: number,
-  ) => ({
-    id: `gid://shopify/CartLine/${id}`,
-    title,
-    unitPrice,
-    quantity,
-    productId: `gid://shopify/Product/demo-${id}`,
-    inSelectedCollection: false,
-    inBuyCollection: false,
-    inGetCollection: false,
-  });
-
-  return [
-    line("1", "Demo T-shirt", 20, 2),
-    line("2", "Demo hoodie", 45, 1),
-    line("3", "Demo cap", 15, 0),
-  ];
-}
 
 function shopperQualifies(
   shopper: DemoShopper,
@@ -75,15 +52,25 @@ function shopperQualifies(
  * Cancel) pointing at elements that no longer exist.
  */
 export function DiscountPreviewPanel({ values, currencyCode }: Props) {
-  const [lines, setLines] = useState<DemoLine[]>(wholeOrderCart);
+  // Quantities the merchant changed, by demo line. The cart itself is rebuilt
+  // from the form, so picking other products keeps the changes that still fit.
+  const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [shopper, setShopper] = useState<DemoShopper>("guest");
   const [inBrowser, setInBrowser] = useState(false);
 
   useEffect(() => setInBrowser(true), []);
 
-  const preview = useMemo(() => buildPreviewConfig(values), [values]);
+  const preview = useMemo(() => buildPreview(values), [values]);
+  const lines = useMemo<DemoLine[]>(
+    () =>
+      preview.lines.map((line) => ({
+        ...line,
+        quantity: quantities[line.id] ?? line.quantity,
+      })),
+    [preview, quantities],
+  );
   const result = useMemo(() => {
-    if (!inBrowser || !preview) return null;
+    if (!inBrowser) return null;
 
     // The preview must never take the form down with it.
     try {
@@ -99,23 +86,24 @@ export function DiscountPreviewPanel({ values, currencyCode }: Props) {
     }
   }, [inBrowser, preview, lines, shopper]);
 
-  if (!preview || !result) return null;
+  if (!result) return null;
 
   const money = (amount: number) => formatMoney(amount, currencyCode);
   const qualifies = shopperQualifies(shopper, values.customerEligibility);
 
-  const changeQuantity = (id: string, delta: number) => {
-    setLines((current) =>
-      current.map((line) =>
-        line.id === id
-          ? {
-              ...line,
-              quantity: Math.max(0, Math.min(99, line.quantity + delta)),
-            }
-          : line,
-      ),
-    );
+  const changeQuantity = (line: DemoLine, delta: number) => {
+    setQuantities((current) => ({
+      ...current,
+      [line.id]: Math.max(0, Math.min(99, line.quantity + delta)),
+    }));
   };
+
+  const kindExplanations =
+    values.discountType === "order_threshold"
+      ? explainOrderThresholds(values, result.subtotal, currencyCode)
+      : values.discountType === "buy_x_get_y"
+        ? explainBuyXGetY(values, result)
+        : explainQuantityTiers(values, lines);
 
   const totalDiscount =
     result.productDiscount + result.orderDiscount + result.shippingDiscount;
@@ -128,7 +116,7 @@ export function DiscountPreviewPanel({ values, currencyCode }: Props) {
             shopper
           ].toLowerCase()}) does not qualify, so nothing applies. Change the shopper to see the discount.`,
         ]),
-    ...explainOrderThresholds(values, result.subtotal, currencyCode),
+    ...kindExplanations,
     ...explainCommonOptions(values),
   ];
 
@@ -192,14 +180,14 @@ export function DiscountPreviewPanel({ values, currencyCode }: Props) {
                         icon="minus"
                         accessibilityLabel={`One less ${line.title}`}
                         {...(line.quantity === 0 ? { disabled: true } : {})}
-                        onClick={() => changeQuantity(line.id, -1)}
+                        onClick={() => changeQuantity(line, -1)}
                       />
                       <s-text>{line.quantity}</s-text>
                       <s-button
                         variant="tertiary"
                         icon="plus"
                         accessibilityLabel={`One more ${line.title}`}
-                        onClick={() => changeQuantity(line.id, 1)}
+                        onClick={() => changeQuantity(line, 1)}
                       />
                     </s-stack>
                   </s-grid>
@@ -259,6 +247,14 @@ export function DiscountPreviewPanel({ values, currencyCode }: Props) {
               )}
             </s-stack>
           </s-box>
+
+          {Object.keys(quantities).length > 0 && (
+            <s-stack direction="inline">
+              <s-button variant="tertiary" onClick={() => setQuantities({})}>
+                Reset demo cart
+              </s-button>
+            </s-stack>
+          )}
 
           <s-stack direction="block" gap="small-200">
             <s-heading>What happens</s-heading>

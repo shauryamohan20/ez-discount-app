@@ -18,14 +18,20 @@ import {
   type DiscountFormValues,
 } from "../lib/discount-form";
 import { todayInShop } from "../lib/shop-time";
-import { getShopTimezoneOffsetMinutes } from "../models/discounts.server";
+import {
+  getShopCurrencyCode,
+  getShopTimezoneOffsetMinutes,
+} from "../models/discounts.server";
 import { saveDiscountFromForm } from "../models/discount-save.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin } = await authenticate.admin(request);
-  const offsetMinutes = await getShopTimezoneOffsetMinutes(admin);
+  const [offsetMinutes, currencyCode] = await Promise.all([
+    getShopTimezoneOffsetMinutes(admin),
+    getShopCurrencyCode(admin).catch(() => ""),
+  ]);
 
-  return { today: todayInShop(offsetMinutes) };
+  return { today: todayInShop(offsetMinutes), currencyCode };
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
@@ -43,7 +49,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 };
 
 export default function NewBuyXGetYPage() {
-  const { today } = useLoaderData<typeof loader>();
+  const { today, currencyCode } = useLoaderData<typeof loader>();
   const fetcher = useFetcher<typeof action>();
 
   const [values, setValues] = useState<DiscountFormValues>(() =>
@@ -103,6 +109,7 @@ export default function NewBuyXGetYPage() {
         values={values}
         errors={errors}
         disabled={saving}
+        currencyCode={currencyCode}
         onChange={setValues}
       />
     </s-page>

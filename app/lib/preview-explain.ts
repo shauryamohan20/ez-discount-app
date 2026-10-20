@@ -1,27 +1,50 @@
 /**
  * Turns the form, as it is right now, into what the live preview needs: the
- * config the app would save, and plain sentences about every option chosen.
+ * config the app would save, a demo cart, and plain sentences about every
+ * option chosen.
  *
  * The form is often half filled while the merchant types, so rows that would
  * fail validation are left out of the preview instead of blocking it. The
- * config is built with the same serializer the app saves with.
+ * config is built with the same serializers the app saves with.
  */
+import { previewBxgy, previewBxgyRules } from "./bxgy-form";
 import type { DiscountFormValues } from "./discount-form";
-import { formatCalendarDate, formatMoney } from "./preview";
+import {
+  formatCalendarDate,
+  formatMoney,
+  type DemoLine,
+  type PreviewResult,
+} from "./preview";
+import {
+  STAND_IN_COLLECTION,
+  STAND_IN_PRODUCT,
+  buyXGetYCart,
+  genericCart,
+  previewScopeIds,
+  quantityTierCart,
+} from "./preview-cart";
 import {
   ALL_PRODUCTS,
   CUSTOMER_ELIGIBILITY_LABELS,
   describeOrderReward,
+  describeSelection,
+  describeTierRange,
   discountClassesFor,
+  serializeBuyXGetYConfig,
   serializeTierConfig,
   sortOrderTiers,
+  sortTiers,
+  type AppliesTo,
   type OrderTier,
   type ShopifyDiscountClass,
+  type Tier,
 } from "./tiers";
 
-export type PreviewConfig = {
+export type PreviewSetup = {
   config: unknown;
   discountClasses: ShopifyDiscountClass[];
+  /** The demo cart with its starting quantities. */
+  lines: DemoLine[];
   /** Rows left out because they are not filled in correctly yet. */
   skippedRows: number;
 };
@@ -32,6 +55,10 @@ function parseAmount(raw: string): number | null {
 
   const value = Number(trimmed);
   return Number.isFinite(value) ? value : null;
+}
+
+function isWholeNumber(value: number | null): value is number {
+  return value !== null && Number.isInteger(value) && value >= 1;
 }
 
 /** The threshold rows that are complete enough to run, sorted by amount. */
@@ -71,26 +98,137 @@ export function previewOrderTiers(values: DiscountFormValues): {
   return { tiers: sortOrderTiers(tiers), skippedRows };
 }
 
-/** Null for kinds the preview does not cover yet. */
-export function buildPreviewConfig(
-  values: DiscountFormValues,
-): PreviewConfig | null {
-  if (values.discountType !== "order_threshold") return null;
+/** The tier rows that are complete enough to run, sorted by quantity. */
+export function previewQuantityTiers(values: DiscountFormValues): {
+  tiers: Tier[];
+  skippedRows: number;
+} {
+  const tiers: Tier[] = [];
+  let skippedRows = 0;
 
-  const { tiers, skippedRows } = previewOrderTiers(values);
+  for (const row of values.tiers) {
+    const minQuantity = parseAmount(row.minQuantity);
+    const maxQuantity = parseAmount(row.maxQuantity);
+    const percentage = parseAmount(row.percentage);
+    const cap = parseAmount(row.maxDiscountedUnits);
+    const hasMax = row.maxQuantity.trim() !== "";
+    const hasCap = row.maxDiscountedUnits.trim() !== "";
+
+    if (
+      !isWholeNumber(minQuantity) ||
+      (hasMax && !(isWholeNumber(maxQuantity) && maxQuantity >= minQuantity)) ||
+      percentage === null ||
+      percentage <= 0 ||
+      percentage > 100 ||
+      (hasCap && !isWholeNumber(cap))
+    ) {
+      skippedRows++;
+      continue;
+    }
+
+    tiers.push({
+      minQuantity,
+      maxQuantity: hasMax ? maxQuantity : null,
+      percentage,
+      maxDiscountedUnits: hasCap ? cap : null,
+    });
+  }
+
+  return { tiers: sortTiers(tiers), skippedRows };
+}
+
+/** What the quantity tiers apply to, with stand ins for an empty selection. */
+function previewAppliesTo(values: DiscountFormValues): AppliesTo {
+  if (values.appliesToType === "products") {
+    const ids = values.products.map((product) => product.id);
+    return {
+      type: "products",
+      productIds: ids.length ? ids : [STAND_IN_PRODUCT.id],
+      collectionIds: [],
+    };
+  }
+
+  if (values.appliesToType === "collections") {
+    const ids = values.collections.map((collection) => collection.id);
+    return {
+      type: "collections",
+      productIds: [],
+      collectionIds: ids.length ? ids : [STAND_IN_COLLECTION.id],
+    };
+  }
+
+  return ALL_PRODUCTS;
+}
+
+/**
+ * Everything the preview needs for the form as it is now: the config built
+ * with the same serializers the app saves with, the discount classes, and a
+ * demo cart for this kind of discount.
+ */
+export function buildPreview(values: DiscountFormValues): PreviewSetup {
+  const eligibility = values.customerEligibility;
+
+  if (values.discountType === "order_threshold") {
+    const { tiers, skippedRows } = previewOrderTiers(values);
+
+    return {
+      config: JSON.parse(
+        serializeTierConfig(
+          "order_threshold",
+          tiers,
+          ALL_PRODUCTS,
+          eligibility,
+        ),
+      ),
+      discountClasses: discountClassesFor("order_threshold", tiers),
+      lines: genericCart(),
+      skippedRows,
+    };
+  }
+
+  if (values.discountType === "buy_x_get_y") {
+    const rules = previewBxgyRules(values.bxgy);
+    const withStandIns = {
+      ...rules,
+      buyScope: { ...rules.buyScope, ids: previewScopeIds(values, "buy") },
+      getScope: { ...rules.getScope, ids: previewScopeIds(values, "get") },
+    };
+
+    return {
+      config: JSON.parse(serializeBuyXGetYConfig(withStandIns, eligibility)),
+      discountClasses: discountClassesFor("buy_x_get_y", []),
+      lines: buyXGetYCart(values, rules),
+      skippedRows: 0,
+    };
+  }
+
+  const { tiers, skippedRows } = previewQuantityTiers(values);
 
   return {
     config: JSON.parse(
       serializeTierConfig(
-        "order_threshold",
+        "quantity_tiers",
         tiers,
-        ALL_PRODUCTS,
-        values.customerEligibility,
+        previewAppliesTo(values),
+        eligibility,
       ),
     ),
-    discountClasses: discountClassesFor("order_threshold", tiers),
+    discountClasses: discountClassesFor("quantity_tiers", []),
+    lines: quantityTierCart(values),
     skippedRows,
   };
+}
+
+function skippedNote(skippedRows: number, noun: string): string[] {
+  if (!skippedRows) return [];
+
+  const one = skippedRows === 1;
+
+  return [
+    `${skippedRows} ${noun}${one ? " is" : "s are"} not filled in correctly yet and ${
+      one ? "is" : "are"
+    } left out of the preview.`,
+  ];
 }
 
 /** Sentences about the options every kind shares. */
@@ -218,15 +356,190 @@ export function explainOrderThresholds(
     "Thresholds compare the cart subtotal before shipping and taxes. The best percentage reached applies, and free shipping stays once reached.",
   );
 
-  if (skippedRows) {
-    lines.push(
-      `${skippedRows} ${
-        skippedRows === 1 ? "threshold is" : "thresholds are"
-      } not filled in correctly yet and ${
-        skippedRows === 1 ? "is" : "are"
-      } left out of the preview.`,
+  return [...lines, ...skippedNote(skippedRows, "threshold")];
+}
+
+function countsTowardTiers(line: DemoLine, appliesTo: AppliesTo): boolean {
+  if (appliesTo.type === "products") {
+    return appliesTo.productIds.includes(line.productId);
+  }
+  if (appliesTo.type === "collections") return line.inSelectedCollection;
+
+  return true;
+}
+
+/** "2 to 4 items: 10% off", with the unit limit when there is one. */
+function describeTier(tier: Tier): string {
+  const cap =
+    tier.maxDiscountedUnits === null
+      ? ""
+      : `, on at most ${tier.maxDiscountedUnits} ${
+          tier.maxDiscountedUnits === 1 ? "unit" : "units"
+        }`;
+
+  return `${describeTierRange(tier)}: ${tier.percentage}% off${cap}`;
+}
+
+function itemCount(count: number): string {
+  return `${count} counting ${count === 1 ? "item" : "items"}`;
+}
+
+/**
+ * Which items count, which tier this cart is in, and what the next tier
+ * would add. The money itself comes from the Function's result.
+ */
+export function explainQuantityTiers(
+  values: DiscountFormValues,
+  lines: DemoLine[],
+): string[] {
+  const { tiers, skippedRows } = previewQuantityTiers(values);
+  const appliesTo = previewAppliesTo(values);
+  const titles = new Map(
+    [...values.products, ...values.collections].map((resource) => [
+      resource.id,
+      resource.title,
+    ]),
+  );
+  const titleOf = (id: string) => titles.get(id) || undefined;
+  const sentences: string[] = [];
+
+  if (values.appliesToType === "products") {
+    sentences.push(
+      values.products.length
+        ? `Only ${describeSelection(
+            "products",
+            values.products.map((product) => product.id),
+            titleOf,
+          )} count toward the tiers and get the discount.`
+        : "No products chosen yet, so the demo cart uses a stand in. Choose products to see them here.",
+    );
+  } else if (values.appliesToType === "collections") {
+    sentences.push(
+      values.collections.length
+        ? `Only products in ${describeSelection(
+            "collections",
+            values.collections.map((collection) => collection.id),
+            titleOf,
+          )} count toward the tiers and get the discount.`
+        : "No collections chosen yet, so the demo cart uses a stand in. Choose collections to see them here.",
+    );
+  } else {
+    sentences.push("Every product in the cart counts toward the tiers.");
+  }
+
+  if (!tiers.length) {
+    return [
+      ...sentences,
+      "Fill in a tier to see it work on the demo cart.",
+      ...skippedNote(skippedRows, "tier"),
+    ];
+  }
+
+  const counted = lines
+    .filter((line) => line.quantity > 0 && countsTowardTiers(line, appliesTo))
+    .reduce((sum, line) => sum + line.quantity, 0);
+
+  // The same choice the Function makes when tiers overlap: the best
+  // percentage, then the higher starting quantity.
+  const best = tiers
+    .filter(
+      (tier) =>
+        counted >= tier.minQuantity &&
+        (tier.maxQuantity === null || counted <= tier.maxQuantity),
+    )
+    .sort(
+      (a, b) => b.percentage - a.percentage || b.minQuantity - a.minQuantity,
+    )[0];
+
+  if (best) {
+    sentences.push(
+      `This cart has ${itemCount(counted)}, so the tier ${describeTier(best)} applies.`,
+    );
+    if (best.maxDiscountedUnits !== null) {
+      sentences.push(
+        "The unit limit is filled in cart order, so the items added first get the discount.",
+      );
+    }
+  } else {
+    sentences.push(
+      `This cart has ${itemCount(counted)}, which no tier covers, so nothing applies.`,
     );
   }
 
-  return lines;
+  const next = tiers.find((tier) => tier.minQuantity > counted);
+  if (next) {
+    const missing = next.minQuantity - counted;
+    sentences.push(
+      `Add ${missing} more counting ${
+        missing === 1 ? "item" : "items"
+      } to reach ${describeTier(next)}.`,
+    );
+  }
+
+  return [...sentences, ...skippedNote(skippedRows, "tier")];
+}
+
+function hasPicks(values: DiscountFormValues, side: "buy" | "get"): boolean {
+  const bxgy = values.bxgy;
+  const kind = side === "buy" ? bxgy.buyScopeKind : bxgy.getScopeKind;
+
+  if (kind === "products") {
+    return (side === "buy" ? bxgy.buyProducts : bxgy.getProducts).length > 0;
+  }
+  if (kind === "collections") {
+    return (
+      (side === "buy" ? bxgy.buyCollections : bxgy.getCollections).length > 0
+    );
+  }
+
+  return true;
+}
+
+/** The offer in one sentence, and how many times it applies to this cart. */
+export function explainBuyXGetY(
+  values: DiscountFormValues,
+  result: PreviewResult,
+): string[] {
+  const rules = previewBxgyRules(values.bxgy);
+  const sentences = [previewBxgy(values.bxgy)];
+
+  if (!hasPicks(values, "buy")) {
+    sentences.push(
+      "Nothing chosen for customers to buy yet, so the demo cart uses a stand in.",
+    );
+  }
+  if (!hasPicks(values, "get")) {
+    sentences.push(
+      "Nothing chosen for customers to get yet, so the demo cart uses a stand in.",
+    );
+  }
+
+  const discounted = result.lines.reduce(
+    (sum, line) => sum + line.discountedUnits,
+    0,
+  );
+  const items = `${discounted} ${discounted === 1 ? "item is" : "items are"}`;
+
+  if (discounted > 0) {
+    const times = Math.floor(discounted / rules.getQuantity);
+    sentences.push(
+      times >= 1
+        ? `In this cart the offer applies ${times} ${
+            times === 1 ? "time" : "times"
+          }, so ${items} discounted.`
+        : `In this cart ${items} discounted.`,
+    );
+  } else {
+    sentences.push(
+      `Nothing applies yet. The cart needs ${rules.buyQuantity} qualifying ${
+        rules.buyQuantity === 1 ? "item" : "items"
+      } to buy, plus ${rules.getQuantity} to get.`,
+    );
+  }
+
+  sentences.push(
+    "The discounted items are always the cheapest eligible ones, and no single item counts as both bought and discounted.",
+  );
+
+  return sentences;
 }

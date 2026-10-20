@@ -33,6 +33,7 @@ import {
 } from "../lib/shop-time";
 import {
   getResourceTitles,
+  getShopCurrencyCode,
   discountEditPath,
   getShopTimezoneOffsetMinutes,
   getTieredDiscount,
@@ -49,9 +50,10 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
     throw new Response("Not found", { status: 404 });
   }
 
-  const [offsetMinutes, discount] = await Promise.all([
+  const [offsetMinutes, discount, currencyCode] = await Promise.all([
     getShopTimezoneOffsetMinutes(admin),
     getTieredDiscount(admin, id),
+    getShopCurrencyCode(admin).catch(() => ""),
   ]);
 
   if (!discount) {
@@ -115,6 +117,7 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
 
   return {
     values,
+    currencyCode,
     usageCount: discount.usageCount,
     unsupportedReason: config.status === "ok" ? null : config.reason,
   };
@@ -198,6 +201,7 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
 export default function EditDiscountPage() {
   const {
     values: loadedValues,
+    currencyCode,
     usageCount,
     unsupportedReason,
   } = useLoaderData<typeof loader>();
@@ -300,6 +304,7 @@ export default function EditDiscountPage() {
         values={values}
         errors={errors}
         disabled={saving}
+        currencyCode={currencyCode}
         methodLocked
         onChange={setValues}
       />

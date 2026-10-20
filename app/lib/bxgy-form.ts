@@ -127,7 +127,7 @@ function wholeNumberError(raw: string): string | undefined {
   return undefined;
 }
 
-function selectionFor(
+export function selectionFor(
   values: BxgyFormValues,
   side: "buy" | "get",
 ): BxgyResource[] {
@@ -230,21 +230,12 @@ export function validateBxgy(
 }
 
 /**
- * The offer as a sentence, updated as the merchant types. It is lenient on
- * purpose: a half filled form still gets a preview, using placeholders for
- * what is missing, so the sentence never disappears while they type.
+ * The offer as the form describes it right now. It is lenient on purpose: a
+ * half filled form still gets a preview, using fallbacks for what is missing,
+ * so the preview never disappears while the merchant types. Used by the
+ * sentence below and by the live preview panel.
  */
-export function previewBxgy(values: BxgyFormValues): string {
-  const titles = new Map<string, string>();
-  for (const resource of [
-    ...values.buyProducts,
-    ...values.buyCollections,
-    ...values.getProducts,
-    ...values.getCollections,
-  ]) {
-    titles.set(resource.id, resource.title);
-  }
-
+export function previewBxgyRules(values: BxgyFormValues): BuyXGetY {
   const wholeOr = (raw: string, fallback: number) => {
     const value = parseNumber(raw);
     return value !== null && Number.isInteger(value) && value >= 1
@@ -257,7 +248,7 @@ export function previewBxgy(values: BxgyFormValues): string {
     ? wholeOr(values.maxApplications, 0)
     : null;
 
-  const preview: BuyXGetY = {
+  return {
     buyQuantity: wholeOr(values.buyQuantity, 1),
     buyScope: {
       kind: values.buyScopeKind,
@@ -274,8 +265,21 @@ export function previewBxgy(values: BxgyFormValues): string {
         : 100,
     maxApplicationsPerOrder: max && max >= 1 ? max : null,
   };
+}
 
-  return describeBuyXGetY(preview, (id) => titles.get(id));
+/** The offer as a sentence, updated as the merchant types. */
+export function previewBxgy(values: BxgyFormValues): string {
+  const titles = new Map<string, string>();
+  for (const resource of [
+    ...values.buyProducts,
+    ...values.buyCollections,
+    ...values.getProducts,
+    ...values.getCollections,
+  ]) {
+    titles.set(resource.id, resource.title);
+  }
+
+  return describeBuyXGetY(previewBxgyRules(values), (id) => titles.get(id));
 }
 
 /** Rebuilds the values from a submitted form, so the action can revalidate. */

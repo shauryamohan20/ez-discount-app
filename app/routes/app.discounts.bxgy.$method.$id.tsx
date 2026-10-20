@@ -29,6 +29,7 @@ import { discountTab, toDiscountGid } from "../lib/discount-id";
 import {
   discountEditPath,
   getResourceTitles,
+  getShopCurrencyCode,
   getShopTimezoneOffsetMinutes,
   getTieredDiscount,
 } from "../models/discounts.server";
@@ -40,9 +41,10 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
   const id = toDiscountGid(params.method, params.id);
   if (!id) throw new Response("Not found", { status: 404 });
 
-  const [offsetMinutes, discount] = await Promise.all([
+  const [offsetMinutes, discount, currencyCode] = await Promise.all([
     getShopTimezoneOffsetMinutes(admin),
     getTieredDiscount(admin, id),
+    getShopCurrencyCode(admin).catch(() => ""),
   ]);
 
   if (!discount) throw new Response("Not found", { status: 404 });
@@ -89,7 +91,7 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
       : blankBxgyForm(),
   };
 
-  return { values, usageCount: discount.usageCount };
+  return { values, currencyCode, usageCount: discount.usageCount };
 };
 
 export const action = async ({ request, params }: ActionFunctionArgs) => {
@@ -110,7 +112,11 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
 };
 
 export default function EditBuyXGetYPage() {
-  const { values: loadedValues, usageCount } = useLoaderData<typeof loader>();
+  const {
+    values: loadedValues,
+    currencyCode,
+    usageCount,
+  } = useLoaderData<typeof loader>();
   const fetcher = useFetcher<typeof action>();
 
   const [values, setValues] = useState<DiscountFormValues>(loadedValues);
@@ -178,6 +184,7 @@ export default function EditBuyXGetYPage() {
         values={values}
         errors={errors}
         disabled={saving}
+        currencyCode={currencyCode}
         methodLocked
         onChange={setValues}
       />
