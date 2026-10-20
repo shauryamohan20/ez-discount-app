@@ -153,7 +153,7 @@ export default function NewDiscountPage() {
   };
 
   return (
-    <s-page heading="Create quantity based discount">
+    <s-page heading="Create quantity based discount" inlineSize="large">
       <s-link slot="breadcrumb-actions" href="/app/discounts/quantity">
         Quantity based discounts
       </s-link>

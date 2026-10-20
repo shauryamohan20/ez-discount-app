@@ -232,7 +232,7 @@ export default function EditOrderDiscountPage() {
   };
 
   return (
-    <s-page heading="Edit whole order discount">
+    <s-page heading="Edit whole order discount" inlineSize="large">
       <s-link slot="breadcrumb-actions" href="/app/discounts/order">
         Whole order discounts
       </s-link>

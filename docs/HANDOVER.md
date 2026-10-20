@@ -248,9 +248,11 @@ order thresholds.
 - `TieredDiscountForm.tsx`: the shared form shell (method, details, applies
   to, customers, tiers or thresholds). Renders `BuyXGetYFields` for that kind.
 - `BuyXGetYFields.tsx`, `ResourceSelector.tsx` (Shopify resource picker).
-- `DiscountPreviewPanel.tsx`: the live preview beside the form, rendered by
-  `TieredDiscountForm` into `s-page`'s `aside` slot, sticky while the form
-  scrolls; below the form on narrow screens. A demo cart with quantity
+- `DiscountPreviewPanel.tsx`: the live preview beside the form.
+  `TieredDiscountForm` lays the form and the panel out in an `s-grid` (two
+  thirds and one third, one column under 900px of container width); the panel
+  is sticky while the form scrolls. `s-page`'s `aside` slot is not used, because
+  it only exists at the default page width. A demo cart with quantity
   buttons, a shopper picker (guest, new, returning), totals with shipping, and
   "What happens" sentences, a reset button. Every kind of discount.
 - `DiscountList.tsx` (a kind's page), `DiscountTable.tsx` (the shared table,
@@ -291,6 +293,8 @@ route exists and Shopify wants a session. A real missing route returns 404.
   fails to open). `functionSourceForDev` in `vite.config.ts` serves the
   Function files the preview imports under `/@id/` instead. Production builds
   bundle them and do not need it.
+- **Every page uses `inlineSize="large"`** (the full width), at the owner's
+  request. Add it to any new `s-page`.
 - **Browser code must not import values from `*.server.ts`.** Type only
   imports are fine. React Router strips server code only from `loader`,
   `action`, `middleware` and `headers`. Typecheck does not catch this; the

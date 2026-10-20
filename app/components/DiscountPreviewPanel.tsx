@@ -43,7 +43,7 @@ function shopperQualifies(
 /**
  * The live preview beside the form. It runs the real Function on a demo cart
  * every time the form changes, and explains every option in plain words. It
- * sits in the page's aside column and stays in view while the form scrolls.
+ * sits in the right column of the form and stays in view while it scrolls.
  *
  * It renders only in the browser, never on the server. Its prices and dates
  * are written in the viewer's own format, which can differ from the server's.
@@ -121,7 +121,7 @@ export function DiscountPreviewPanel({ values, currencyCode }: Props) {
   ];
 
   return (
-    <div slot="aside" style={{ position: "sticky", top: "16px" }}>
+    <div style={{ position: "sticky", top: "16px" }}>
       <s-section heading="Live preview">
         <s-stack direction="block" gap="base">
           <s-paragraph color="subdued">

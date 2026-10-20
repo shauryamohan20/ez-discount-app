@@ -77,7 +77,7 @@ export default function NewBuyXGetYPage() {
   };
 
   return (
-    <s-page heading="Create Buy X Get Y discount">
+    <s-page heading="Create Buy X Get Y discount" inlineSize="large">
       <s-link slot="breadcrumb-actions" href="/app/discounts/bxgy">
         Buy X Get Y discounts
       </s-link>

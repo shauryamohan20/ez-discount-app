@@ -160,7 +160,7 @@ export default function NewOrderDiscountPage() {
   };
 
   return (
-    <s-page heading="Create whole order discount">
+    <s-page heading="Create whole order discount" inlineSize="large">
       <s-link slot="breadcrumb-actions" href="/app/discounts/order">
         Whole order discounts
       </s-link>

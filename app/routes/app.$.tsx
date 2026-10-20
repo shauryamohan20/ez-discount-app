@@ -18,7 +18,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
 function PageNotFound() {
   return (
-    <s-page heading="Page not found">
+    <s-page heading="Page not found" inlineSize="large">
       <s-section>
         <s-stack direction="block" gap="base">
           <s-paragraph>

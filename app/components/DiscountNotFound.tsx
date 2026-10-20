@@ -16,7 +16,7 @@ export function DiscountNotFound({
   backLabel = `Back to ${APP_NAME}`,
 }: Props) {
   return (
-    <s-page heading="Discount not found">
+    <s-page heading="Discount not found" inlineSize="large">
       <s-link slot="breadcrumb-actions" href={backHref}>
         {backLabel}
       </s-link>

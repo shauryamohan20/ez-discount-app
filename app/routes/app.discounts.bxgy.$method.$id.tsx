@@ -142,7 +142,7 @@ export default function EditBuyXGetYPage() {
   };
 
   return (
-    <s-page heading="Edit Buy X Get Y discount">
+    <s-page heading="Edit Buy X Get Y discount" inlineSize="large">
       <s-link slot="breadcrumb-actions" href="/app/discounts/bxgy">
         Buy X Get Y discounts
       </s-link>

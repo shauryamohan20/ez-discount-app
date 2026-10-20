@@ -249,7 +249,7 @@ export default function EditDiscountPage() {
   };
 
   return (
-    <s-page heading="Edit quantity based discount">
+    <s-page heading="Edit quantity based discount" inlineSize="large">
       <s-link slot="breadcrumb-actions" href="/app/discounts/quantity">
         Quantity based discounts
       </s-link>
