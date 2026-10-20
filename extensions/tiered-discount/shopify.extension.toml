@@ -19,7 +19,7 @@ description = "t:description"
   # Where the Shopify admin opens this app when a merchant creates or opens one
   # of its discounts from the admin's own Discounts page. :functionId and :id
   # are filled in by the admin. Both routes look the discount up and send the
-  # merchant to the right tab, since one Function backs both kinds of discount.
+  # merchant to the right tab, since one Function backs every kind of discount.
   [extensions.ui.paths]
   create = "/app/discount/:functionId/new"
   details = "/app/discount/:functionId/:id"

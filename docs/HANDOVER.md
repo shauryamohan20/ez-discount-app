@@ -1,0 +1,449 @@
+# EZ Master Discount: handover
+
+Snapshot of the project as of 20 October 2026, written so work can continue in
+a new Claude account with no access to the previous chat. Everything here was
+checked against the repository when it was written. If the code and this file
+disagree, trust the code, then fix this file.
+
+---
+
+## 1. How to resume
+
+1. Open Claude Code on the project folder:
+   `C:\Users\mohan\Desktop\ez-discount-app\ez-discount-app`
+2. `CLAUDE.md` in that folder loads automatically. It holds the working rules
+   and tells Claude to read this file.
+3. Fix the Shopify CLI first if it is still broken (section 8).
+4. Suggested first message:
+
+   > Read docs/HANDOVER.md and CLAUDE.md, then check the repo matches them and
+   > tell me anything that differs. Do not change anything yet.
+
+---
+
+## 2. The owner and how to work with them
+
+- A web developer (WordPress, Shopify themes) who is new to building Shopify
+  apps. Explain steps clearly and in order.
+- **Windows. Give CMD commands only, never PowerShell.** Put each command in
+  its own code block.
+- **Use pnpm, not npm** (except `npm install -g @shopify/cli@latest`, which is
+  how the global CLI is installed).
+- **Never use em dashes** in anything written for the owner: replies, docs,
+  commit messages, UI copy.
+- **Ask before adding any new dependency.**
+- **Use current shopify.dev docs** for API names, fields and versions, not
+  memory. Cite them.
+- **Do not start a second dev server.** The owner runs `pnpm run dev` in their
+  own window. Do not stop theirs either.
+- **After every milestone:** run the checks yourself (section 7), give exact
+  steps to test in the dev store, commit, and push to `main`.
+- **For a large feature:** research the docs, reply with a plan, and wait for
+  approval before coding. Then build in milestones. If the owner says not to
+  wait, take the recommended options, say which, and keep going.
+- When a decision is the owner's, recommend one option rather than listing
+  every possibility.
+
+---
+
+## 3. Project facts
+
+| | |
+|---|---|
+| App name | EZ Master Discount (`name` in `shopify.app.toml`) |
+| Website | https://www.ezmasterdiscount.com (http redirects to https) |
+| Project root | `C:\Users\mohan\Desktop\ez-discount-app\ez-discount-app` |
+| Repository | https://github.com/shauryamohan20/ez-discount-app (private), branch `main` |
+| Template | Shopify React Router app template, TypeScript |
+| UI | Polaris web components (`s-page`, `s-table`, ...) and App Bridge |
+| Database | Prisma with SQLite (`dev.sqlite`), sessions only |
+| Admin API version | 2026-07 (`ApiVersion.July26` in `app/shopify.server.ts`) |
+| Function API version | 2026-07 (`extensions/tiered-discount/shopify.extension.toml`) |
+| Node / pnpm | Node 24.19.0, pnpm 11 |
+| Dev store | `greyteck-store` (Partner development store) |
+| Scopes | `write_products, write_metaobjects, write_metaobject_definitions, write_discounts` |
+| Original test discount | `gid://shopify/DiscountAutomaticNode/1536741376237` (old untyped config, must keep working) |
+
+pnpm 11 ignores the `"pnpm"` block in `package.json`. Its settings live in
+`pnpm-workspace.yaml`, including an override `"restore-cursor>onetime": "^5.1.2"`
+that fixed a crash during GraphQL type generation. Do not undo it. The warning
+about the ignored `"pnpm"` field on every command is harmless.
+
+---
+
+## 4. What the app does
+
+Three kinds of discount, all powered by **one** Shopify Function, each on its
+own tab in the app:
+
+**Quantity based** (`quantity_tiers`, PRODUCT class)
+- Tiers with a from and to quantity. Empty "to" means no upper limit; from equal
+  to "to" matches an exact quantity. Overlapping ranges are rejected.
+- Optional cap on how many units a tier discounts (applied in cart order).
+- Applies to all products, specific products, or specific collections. Only
+  matching items count toward the quantity, and only they are discounted.
+
+**Whole order** (`order_threshold`, ORDER class)
+- Percentage off the order once the subtotal reaches a threshold. The highest
+  threshold reached wins.
+- Thresholds are in the shop's currency. The buyer's subtotal is divided by
+  `presentmentCurrencyRate` first, and money is compared in whole cents.
+- Compared against the subtotal before shipping and taxes.
+
+**Buy X Get Y** (`buy_x_get_y`, PRODUCT class)
+- Buy N of some products, get M of the same or other products free or at a
+  percentage off, repeated as often as the cart allows, up to an optional
+  limit per order.
+- Buy side: any product, specific products, or specific collections. Get side:
+  the same items, specific products, or specific collections.
+- The discounted units are always the cheapest eligible ones. No unit is ever
+  both a buy unit and a get unit. Units are pooled across the selection.
+
+**Shared by all three**
+- Automatic or discount code. Codes get a total usage limit and a once per
+  customer switch (Shopify offers only these two; there is no "N times per
+  customer", and automatic discounts have no usage limits at all).
+- Customer eligibility: everyone, signed in, no previous orders, at least one
+  previous order. Evaluated in the Function. An anonymous cart cannot satisfy
+  any rule except "everyone".
+- Start date and optional end date, in the shop's time zone.
+- Combination: never stacks with its own class; a checkbox for the other class
+  (order for product kinds, product for order); a checkbox for shipping.
+- List, create, edit, activate, deactivate (with confirmation, because
+  activating rewrites dates), delete (with confirmation).
+- Method (automatic or code) and kind are locked after creation.
+
+**Other pages**
+- Home: a tile per kind with counts, a table of every discount, a website link.
+- A "which kind of discount" page, used by the Home button and by the Shopify
+  admin's own create flow.
+- The root address `/` never stays on screen (section 5.4).
+
+---
+
+## 5. Architecture
+
+### 5.1 The Function: `extensions/tiered-discount`
+
+- Handle `tiered-discount`, single target `cart.lines.discounts.generate.run`.
+  **Never rename the handle or the metafield namespace**: every saved discount
+  stores the handle as `functionHandle`, and its settings live in `$app:tiered`.
+- `src/cart_lines_discounts_generate_run.ts`: shared guards (empty cart, no
+  config, customer rule), then `runForType` dispatches on `config.type`:
+  `order_threshold`, `buy_x_get_y`, otherwise quantity tiers. A missing type
+  means quantity tiers.
+- `src/buy_x_get_y.ts`: Buy X Get Y as small pure functions. Works on cart
+  lines, not individual units, so a line of 500 does not create 500 objects
+  inside the instruction budget. The number of applications is the smallest of
+  three bounds (comments in the file explain why).
+- `src/cart_lines_discounts_generate_run.graphql`: the input query. It reads
+  buyer identity, cart subtotal, each line's unit price, product ID, three
+  collection membership flags, `presentmentCurrencyRate`, discount classes and
+  the config metafield.
+- Collection membership needs input query variables: `$collectionIds`
+  (quantity tiers), `$buyCollectionIds`, `$getCollectionIds` (Buy X Get Y).
+  Each is nullable with a default of `[]`, so discounts saved before a variable
+  existed still run. They come from the `input-variables` metafield, configured
+  under `[extensions.input.variables]` in the extension toml.
+- Every product discount target is one per cart line with a quantity. Shopify
+  merges targets that share a line, and a merged target without a quantity
+  would discount the whole line.
+- Malformed config never throws; it produces no operations.
+- `[extensions.ui.paths]` sends the Shopify admin to `/app/discount/:functionId/new`
+  and `/app/discount/:functionId/:id`.
+- The display name in `locales/en.default.json` is "EZ Master Discount", which
+  is what Shopify's discount type picker shows.
+
+### 5.2 Metafields on each discount
+
+Namespace `$app:tiered`, both of type `json`, written in the same mutation.
+
+`config`, version 6. Older versions still load and behave as they did; the app
+refuses to edit a version newer than it knows.
+
+```json
+{"version":6,"type":"quantity_tiers",
+ "tiers":[{"minQuantity":2,"maxQuantity":4,"percentage":10,"maxDiscountedUnits":null}],
+ "appliesTo":{"type":"all","productIds":[],"collectionIds":[]},
+ "customerEligibility":"all"}
+```
+
+```json
+{"version":6,"type":"order_threshold",
+ "tiers":[{"minSubtotal":100,"percentage":10},{"minSubtotal":200,"percentage":15}],
+ "appliesTo":{"type":"all","productIds":[],"collectionIds":[]},
+ "customerEligibility":"all"}
+```
+
+```json
+{"version":6,"type":"buy_x_get_y",
+ "buy":{"quantity":2,"scope":{"kind":"collections","ids":["gid://shopify/Collection/1"]}},
+ "get":{"quantity":1,"value":{"percentage":100},"scope":{"kind":"same_as_buy","ids":[]}},
+ "maxApplicationsPerOrder":3,"discountedUnits":"cheapest","customerEligibility":"all"}
+```
+
+`get.value` is a tagged object so a fixed amount can be added later as
+`{"fixedAmount": 5}` without a migration.
+
+`input-variables`, always written with all three keys:
+
+```json
+{"collectionIds":[],"buyCollectionIds":[],"getCollectionIds":[]}
+```
+
+Version history: 1 tiers only; 2 maxQuantity and maxDiscountedUnits; 3
+appliesTo; 4 customerEligibility; 5 type; 6 buy_x_get_y.
+
+### 5.3 The app
+
+**`app/lib`** (safe to import in browser code)
+- `tiers.ts`: the config contract, parser, serializers, summaries, limits
+  (`MAX_TIERS`, `MAX_SCOPE_IDS` = 100, `MAX_CONFIG_BYTES` = 9500).
+- `discount-form.ts`: form values, validation, `formValuesToSubmission`,
+  `mapUserErrors`.
+- `bxgy-form.ts`: the Buy X Get Y part of the form, validation, live preview.
+- `discount-id.ts`: gid helpers, `discountTab`, `discountPath`.
+- `shop-time.ts`: dates in the shop's time zone.
+- `brand.ts`: app name and website.
+
+**`app/models`** (server only)
+- `discounts.server.ts`: every Admin GraphQL call. List (`discountNodes`,
+  `type:app`), get, create and update (automatic and code), activate,
+  deactivate, delete, shop time zone and currency, title lookup in batches of
+  250, `runDiscountRowAction`, `discountEditPath`,
+  `findTieredDiscountByNumericId`.
+- `discount-save.server.ts`: `saveDiscountFromForm`, validate then create or
+  update. Used by the Buy X Get Y pages; the older pages have the same steps
+  inline.
+- `discount-routing.server.ts`: `redirectToDiscount` for links that carry only
+  a numeric ID.
+
+**`app/components`**
+- `TieredDiscountForm.tsx`: the shared form shell (method, details, applies
+  to, customers, tiers or thresholds). Renders `BuyXGetYFields` for that kind.
+- `BuyXGetYFields.tsx`, `ResourceSelector.tsx` (Shopify resource picker).
+- `DiscountList.tsx` (a kind's page), `DiscountTable.tsx` (the shared table,
+  row actions and confirmation dialog), `DiscountSummary.tsx` (the "What it
+  does" cell for every kind), `DiscountNotFound.tsx`.
+
+**Routes** (`app/routes`, flat routes)
+
+| Path | Purpose |
+|---|---|
+| `/` | Forwards: into the app with shop details or inside the admin frame, else to the website |
+| `/app` | Home: tiles, every discount, website link |
+| `/app/discounts` | Redirects to the quantity tab |
+| `/app/discounts/new` | Choose which kind of discount to create |
+| `/app/discounts/{quantity,order,bxgy}` | A kind's list |
+| `/app/discounts/{kind}/new` | Create |
+| `/app/discounts/{kind}/{automatic,code}/:id` | Edit. Sends a discount of another kind to its own tab |
+| `/app/discount/:functionId/new`, `/:id` | Entry points from the Shopify admin |
+| `/app/discounts/:method/:id`, `/app/discounts/:id` | Old URL formats, resolved and redirected |
+| `/app/*` | Not found page inside the app |
+
+Unauthenticated requests to an embedded route return **410**, which means the
+route exists and Shopify wants a session. A real missing route returns 404.
+
+### 5.4 Rules the code relies on
+
+- **Browser code must not import values from `*.server.ts`.** Type only
+  imports are fine. React Router strips server code only from `loader`,
+  `action`, `middleware` and `headers`. Typecheck does not catch this; the
+  build does.
+- **Redirect with the `redirect` returned by `authenticate.admin(request)`,**
+  not React Router's. It keeps the embedded app's parameters on a full page
+  load.
+- **Whether a discount is automatic or a code comes from its `__typename`,**
+  not the ID prefix. The admin's links use a `DiscountNode` gid.
+- **Titles are never stored.** They are looked up when a page loads, so a
+  renamed product shows its new name and a deleted one says "No longer
+  available".
+- **Every edit page checks the discount's kind** with `discountTab` and sends
+  other kinds to their own tab. Without that, saving would overwrite one kind's
+  settings with another's.
+
+### 5.5 Adding a fourth kind of discount
+
+1. `app/lib/tiers.ts`: type, labels, parse branch, serializer, summary, bump
+   `TIER_CONFIG_VERSION`.
+2. Function: a runner, a branch in `runForType`, input query fields if needed,
+   regenerate types, fixtures.
+3. `app/lib/discount-id.ts`: a tab in `DiscountTab` and `discountTab`.
+4. `DiscountSummary.tsx`: a branch.
+5. Routes: list, new, edit under `/app/discounts/<tab>`.
+6. Navigation in `app/routes/app.tsx`, a tile and counts on the home page, an
+   option on `app.discounts.new.tsx`.
+
+---
+
+## 6. Decisions already made, and why
+
+- **One Function for every kind**, branching on `type`. Shopify caps active
+  discount functions per store at 25.
+- **A tab per kind,** chosen by the owner. The tab is the type selector.
+- **Shop currency for thresholds,** converted with `presentmentCurrencyRate`,
+  so a threshold is worth the same everywhere. Per market thresholds are not
+  built.
+- **Buy X Get Y does not stack with other product discounts** (the owner's
+  "Option A"). Shopify applies the better one. Product discounts only stack on
+  the same item on Shopify Plus.
+- **Buy X Get Y does not send Shopify's `prerequisites` field** (added in
+  2026-04 for the buy side). Its docs do not say whether one line can be both a
+  prerequisite and a target, which is the most common case. Proven targets
+  with quantities are used instead. Revisit after testing in the dev store.
+- **Product and collection targeting is not offered for whole order
+  discounts.** It needs line subtotals and `excludedCartLineIds`.
+- **No "N uses per customer":** Shopify does not offer it.
+- **The template's shop domain login form was removed.** App Store requirement
+  2.3.1 forbids asking for a shop's domain.
+
+---
+
+## 7. Checking work
+
+Run all of these before every commit:
+
+```bash
+cd C:\Users\mohan\Desktop\ez-discount-app\ez-discount-app && pnpm run typecheck
+```
+
+```bash
+cd C:\Users\mohan\Desktop\ez-discount-app\ez-discount-app && pnpm run lint
+```
+
+```bash
+cd C:\Users\mohan\Desktop\ez-discount-app\ez-discount-app && pnpm run build
+```
+
+Function tests, 79 fixtures, when the CLI works:
+
+```bash
+cd C:\Users\mohan\Desktop\ez-discount-app\ez-discount-app\extensions\tiered-discount && pnpm test -- --run
+```
+
+When the CLI is broken, `pnpm test` skips every test because it builds through
+the CLI. Instead, with the dev server running (it rebuilds the wasm when the
+source changes):
+
+```bash
+cd C:\Users\mohan\Desktop\ez-discount-app\ez-discount-app && node scripts/verify-function.mjs
+```
+
+After changing the Function's `.graphql` query, regenerate its types:
+
+```bash
+cd C:\Users\mohan\Desktop\ez-discount-app\ez-discount-app\extensions\tiered-discount && pnpm shopify app function typegen
+```
+
+Or without the CLI (byte for byte the same output):
+
+```bash
+cd C:\Users\mohan\Desktop\ez-discount-app\ez-discount-app && pnpm exec graphql-codegen --config scripts/function-codegen.json
+```
+
+Fixtures live in `extensions/tiered-discount/tests/fixtures`. Each must include
+every field the input query selects, or validation fails.
+
+---
+
+## 8. Open problems in the environment
+
+**The global Shopify CLI is broken.** `shopify version` fails with
+`ERR_MODULE_NOT_FOUND`. Cause: the CLI updates itself in the background, and
+the update fails with EPERM because a running dev server holds
+`cloudflared.exe` open, leaving a half replaced install. The owner's last
+reinstall failed for the same reason. Fix, in this order:
+
+1. Stop the dev server with Ctrl+C.
+2. `npm install -g @shopify/cli@latest`
+3. `shopify config autoupgrade off` (stops it breaking itself again)
+4. `pnpm run dev`
+
+An alternative that removes the problem for good is installing `@shopify/cli`
+as a project devDependency. It was proposed and not yet approved.
+
+**"Error while polling app logs"** repeats in the dev terminal. Not diagnosed.
+The real error only appears with `shopify app dev --verbose`, in lines starting
+`Errors:`.
+
+---
+
+## 9. Waiting on the owner
+
+- Fix the CLI and restart the dev server (section 8). Until then the admin
+  sidebar still shows the old name "ez-discount-app", because `shopify app dev`
+  applies `shopify.app.toml` changes when it starts.
+- Run `shopify app deploy` so the new name, the admin entry points and the
+  latest Function reach the live app.
+- Set the App Store listing name and support website in the Partner Dashboard.
+  Nothing in the code controls those.
+- Test Buy X Get Y in the dev store with the checklist in section 11.
+
+---
+
+## 10. Not built yet
+
+From the owner's roadmap, in a sensible order:
+
+1. **App Store compliance:** the three mandatory GDPR webhooks
+   (`customers/data_request`, `customers/redact`, `shop/redact`). The
+   `app/uninstalled` webhook already deletes sessions.
+2. **Billing** with the App Subscriptions API: a monthly plan and a free trial.
+3. **Production database:** Prisma from SQLite to Postgres.
+4. **Deployment:** Fly.io, Render or Railway.
+5. **Cleanup of `shopify.app.toml`:** the template's `demo_info` product
+   metafield and `example` metaobject, and `application_url` /
+   `redirect_urls` still on `https://example.com` (the CLI overrides them
+   during dev). Removing a metaobject definition can delete merchant data on
+   deploy, so do it deliberately.
+6. **App Store listing:** assets and a submission checklist.
+
+Smaller items noted along the way:
+- Buy X Get Y `prerequisites` (section 6).
+- Product and collection targeting for whole order discounts.
+- Fixed amount off for any kind.
+- A "combine with other product discounts" option (the owner's "Option B").
+- Quantity tier unit caps take units in cart order; cheapest first would be
+  kinder to customers.
+- The older create and edit pages could use `saveDiscountFromForm` and
+  `formValuesToSubmission` like the Buy X Get Y pages.
+
+---
+
+## 11. Buy X Get Y dev store checklist (not yet run by the owner)
+
+Set up a collection with three products at $10, $20 and $30. Create: buy 2 from
+that collection, get 1 of the same items, free, no limit.
+
+| Cart | Expected |
+|---|---|
+| 1 item | nothing |
+| 2 items | nothing |
+| the $10, $20 and $30 items | the $10 item free |
+| 3 of one product on one line | exactly 1 unit free |
+| 4 items | 1 free |
+| 2 of each | both $10 items free |
+
+Then set the maximum uses to 1 and repeat the 6 item cart: only 1 free. Then
+create "buy 2 from the collection, get 1 of a different product at 50% off":
+2 shirts and the product gives it half price; without the product, nothing.
+Confirm the quantity tier and whole order discounts still apply as before.
+
+---
+
+## 12. History
+
+27 commits on `main`, oldest first:
+
+1. Template scaffold, then the first Function (quantity tiers).
+2. Admin UI: list, create, edit, activate, deactivate, delete.
+3. Rename to Quantity Based Discount; ranges and unit caps; product and
+   collection targeting; customer rules; discount codes.
+4. Whole order discounts (Function, then UI); a tab per kind.
+5. 404 fixes (old URLs, admin entry points, ID handling, embedded redirects),
+   a shared full width table, the home page with tiles.
+6. Buy X Get Y: Function, create page with preview, edit page, polish.
+7. Renamed to EZ Master Discount with the website linked; the login form
+   removed from the root address.
+
+`git log` has the reasoning for each change in its commit message.

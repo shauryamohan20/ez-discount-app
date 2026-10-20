@@ -1,0 +1,25 @@
+{
+  "schema": "extensions/tiered-discount/schema.graphql",
+  "documents": "extensions/tiered-discount/src/*.graphql",
+  "generates": {
+    "extensions/tiered-discount/generated/api.ts": {
+      "plugins": ["typescript", "typescript-operations"]
+    }
+  },
+  "config": {
+    "omitOperationSuffix": true,
+    "defaultScalarType": "unknown",
+    "scalars": {
+      "Date": "string",
+      "DateTime": "string",
+      "DateTimeWithoutTimezone": "string",
+      "Decimal": "string",
+      "Handle": "string",
+      "ID": "string",
+      "JSON": "unknown",
+      "TimeWithoutTimezone": "string",
+      "URL": "string",
+      "Void": "null"
+    }
+  }
+}
