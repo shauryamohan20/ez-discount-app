@@ -280,6 +280,12 @@ route exists and Shopify wants a session. A real missing route returns 404.
   write it differently, React throws the server markup away and rebuilds the
   page, and App Bridge's title bar buttons (Save, Cancel) stop working. The live
   preview panel renders only in the browser for this reason.
+- **The Shopify CLI dev proxy sends every path starting with `/extensions` to
+  its extensions server**, so browser code cannot load files from
+  `extensions/` at their normal address in development (404, and the page
+  fails to open). `functionSourceForDev` in `vite.config.ts` serves the
+  Function files the preview imports under `/@id/` instead. Production builds
+  bundle them and do not need it.
 - **Browser code must not import values from `*.server.ts`.** Type only
   imports are fine. React Router strips server code only from `loader`,
   `action`, `middleware` and `headers`. Typecheck does not catch this; the
