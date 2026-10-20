@@ -1,12 +1,26 @@
-import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
-import { redirect, Form, useActionData, useLoaderData } from "react-router";
+import { useEffect } from "react";
+import type { LoaderFunctionArgs } from "react-router";
+import { redirect, useNavigate } from "react-router";
 
-import { login } from "../../shopify.server";
-import { loginErrorMessage } from "./error.server";
+import {
+  APP_NAME,
+  APP_WEBSITE_LABEL,
+  APP_WEBSITE_URL,
+} from "../../lib/brand";
 
-import styles from "./styles.module.css";
-import { APP_NAME, APP_WEBSITE_LABEL, APP_WEBSITE_URL } from "../../lib/brand";
-
+/**
+ * The app's root address. Nobody should stay here:
+ *
+ * - Shopify opens the app here with the shop's details, which forward
+ *   straight into the app.
+ * - Inside the admin, clicking the app's name can land here without those
+ *   details. The page sees it is inside the admin and forwards into the app.
+ * - Anyone else, outside Shopify, is sent to the website.
+ *
+ * This used to be the template's form for typing a shop domain to log in.
+ * Shopify App Store requirement 2.3.1 says an app must not ask for a shop's
+ * domain, and installing happens from the App Store, so the form is gone.
+ */
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const url = new URL(request.url);
 
@@ -14,63 +28,37 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     throw redirect(`/app?${url.searchParams.toString()}`);
   }
 
-  return { showForm: Boolean(login) };
+  return null;
 };
 
-export const action = async ({ request }: ActionFunctionArgs) => {
-  const errors = loginErrorMessage(await login(request));
+export default function Root() {
+  const navigate = useNavigate();
 
-  return { errors };
-};
+  useEffect(() => {
+    // Inside the Shopify admin the app runs in a frame. Comparing the two
+    // windows is allowed even though the admin is on another domain.
+    const insideAdmin = window.top !== window.self;
 
-export default function App() {
-  const { showForm } = useLoaderData<typeof loader>();
-  const actionData = useActionData<typeof action>();
-  const errors = actionData?.errors;
+    if (insideAdmin) {
+      navigate("/app", { replace: true });
+    } else {
+      window.location.replace(APP_WEBSITE_URL);
+    }
+  }, [navigate]);
 
+  // Shown only for the moment before the forward, or if scripts are off.
   return (
-    <div className={styles.index}>
-      <div className={styles.content}>
-        <h1 className={styles.heading}>{APP_NAME}</h1>
-        <p className={styles.text}>
-          Quantity tiers, whole order discounts and Buy X Get Y offers for your
-          Shopify store, applied automatically or with a code.
-        </p>
-        {showForm && (
-          <Form className={styles.form} method="post">
-            <label className={styles.label}>
-              <span>Shop domain</span>
-              <input className={styles.input} type="text" name="shop" />
-              <span>{errors?.shop ?? "e.g: my-shop-domain.myshopify.com"}</span>
-            </label>
-            <button className={styles.button} type="submit">
-              Log in
-            </button>
-          </Form>
-        )}
-        <ul className={styles.list}>
-          <li>
-            <strong>Automatic or code</strong>. Apply the discount in the cart
-            on its own, or give customers a code to enter at checkout.
-          </li>
-          <li>
-            <strong>Three kinds of discount</strong>. More off as the quantity
-            grows, a percentage off orders over an amount, and buy 2 get 1 free
-            style offers.
-          </li>
-          <li>
-            <strong>In your control</strong>. Schedule a start and end date, and
-            turn a discount on or off whenever you want.
-          </li>
-        </ul>
-        <p className={styles.text}>
-          Learn more at{" "}
-          <a href={APP_WEBSITE_URL} target="_blank" rel="noreferrer">
-            {APP_WEBSITE_LABEL}
-          </a>
-          .
-        </p>
-      </div>
-    </div>
+    <main
+      style={{
+        fontFamily: "system-ui, sans-serif",
+        padding: "48px 16px",
+        textAlign: "center",
+      }}
+    >
+      <h1>{APP_NAME}</h1>
+      <p>
+        Taking you to <a href={APP_WEBSITE_URL}>{APP_WEBSITE_LABEL}</a>.
+      </p>
+    </main>
   );
 }
