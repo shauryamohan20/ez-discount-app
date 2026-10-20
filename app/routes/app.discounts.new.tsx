@@ -6,7 +6,7 @@ import { authenticate } from "../shopify.server";
 import { APP_NAME } from "../lib/brand";
 
 /**
- * One Function backs both kinds of discount, so anything that asks to create
+ * One Function backs every kind of discount, so anything that asks to create
  * "a discount from this app" without saying which kind lands here: the Home
  * page, the Shopify admin's own create flow, and older links that predate the
  * split into tabs.
@@ -17,6 +17,37 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   return null;
 };
 
+type TileProps = {
+  title: string;
+  description: string;
+  href: string;
+  action: string;
+};
+
+/** One kind of discount, laid out like the tiles on the Home page. */
+function DiscountKindTile({ title, description, href, action }: TileProps) {
+  return (
+    <s-box
+      background="base"
+      border="base"
+      borderRadius="base"
+      padding="base"
+      minBlockSize="180px"
+      inlineSize="100%"
+    >
+      <s-stack direction="block" gap="base">
+        <s-text type="strong">{title}</s-text>
+        <s-paragraph>{description}</s-paragraph>
+        <s-stack direction="inline">
+          <s-button variant="primary" href={href}>
+            {action}
+          </s-button>
+        </s-stack>
+      </s-stack>
+    </s-box>
+  );
+}
+
 export default function ChooseDiscountKindPage() {
   return (
     <s-page heading="Create a discount" inlineSize="large">
@@ -24,48 +55,40 @@ export default function ChooseDiscountKindPage() {
         {APP_NAME}
       </s-link>
 
-      <s-section heading="Quantity based discount">
-        <s-stack direction="block" gap="base">
-          <s-paragraph>
-            A percentage off the items in the cart, based on how many there are.
-            Use quantity ranges, exact quantities, a cap on discounted units,
-            and product or collection targeting.
-          </s-paragraph>
-          <s-stack direction="inline">
-            <s-button variant="primary" href="/app/discounts/quantity/new">
-              Create quantity based discount
-            </s-button>
-          </s-stack>
-        </s-stack>
-      </s-section>
+      <s-section heading="Choose a kind of discount">
+        <s-query-container>
+          <s-grid
+            gridTemplateColumns="@container (inline-size > 640px) 1fr 1fr 1fr, 1fr"
+            gap="base"
+          >
+            <s-grid-item>
+              <DiscountKindTile
+                title="Quantity based discount"
+                description="A percentage off the items in the cart, based on how many there are. Use quantity ranges, exact quantities, a cap on discounted units, and product or collection targeting."
+                href="/app/discounts/quantity/new"
+                action="Create quantity based discount"
+              />
+            </s-grid-item>
 
-      <s-section heading="Whole order discount">
-        <s-stack direction="block" gap="base">
-          <s-paragraph>
-            A percentage off the entire order once the cart subtotal reaches an
-            amount you set. Spend 100 for 10% off, spend 200 for 15% off.
-          </s-paragraph>
-          <s-stack direction="inline">
-            <s-button variant="primary" href="/app/discounts/order/new">
-              Create whole order discount
-            </s-button>
-          </s-stack>
-        </s-stack>
-      </s-section>
+            <s-grid-item>
+              <DiscountKindTile
+                title="Whole order discount"
+                description="A percentage off the entire order, free shipping, or both, once the cart subtotal reaches an amount you set. Spend 50 for free shipping, spend 100 for 10% off."
+                href="/app/discounts/order/new"
+                action="Create whole order discount"
+              />
+            </s-grid-item>
 
-      <s-section heading="Buy X Get Y discount">
-        <s-stack direction="block" gap="base">
-          <s-paragraph>
-            Buy a quantity of some products and get others free or at a
-            percentage off. Buy 2 get 1 free, buy 2 get the third at half price,
-            or buy one product and get a different one.
-          </s-paragraph>
-          <s-stack direction="inline">
-            <s-button variant="primary" href="/app/discounts/bxgy/new">
-              Create Buy X Get Y discount
-            </s-button>
-          </s-stack>
-        </s-stack>
+            <s-grid-item>
+              <DiscountKindTile
+                title="Buy X Get Y discount"
+                description="Buy a quantity of some products and get others free or at a percentage off. Buy 2 get 1 free, buy 2 get the third at half price, or buy one product and get a different one."
+                href="/app/discounts/bxgy/new"
+                action="Create Buy X Get Y discount"
+              />
+            </s-grid-item>
+          </s-grid>
+        </s-query-container>
       </s-section>
     </s-page>
   );
