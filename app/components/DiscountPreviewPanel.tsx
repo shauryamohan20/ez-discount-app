@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import type { DiscountFormValues } from "../lib/discount-form";
 import {
@@ -67,24 +67,37 @@ function shopperQualifies(
  * The live preview beside the form. It runs the real Function on a demo cart
  * every time the form changes, and explains every option in plain words. It
  * sits in the page's aside column and stays in view while the form scrolls.
+ *
+ * It renders only in the browser, never on the server. Its prices and dates
+ * are written in the viewer's own format, which can differ from the server's.
+ * Any difference in the first render makes React throw the server markup away
+ * and rebuild the page, which leaves App Bridge's title bar buttons (Save,
+ * Cancel) pointing at elements that no longer exist.
  */
 export function DiscountPreviewPanel({ values, currencyCode }: Props) {
   const [lines, setLines] = useState<DemoLine[]>(wholeOrderCart);
   const [shopper, setShopper] = useState<DemoShopper>("guest");
+  const [inBrowser, setInBrowser] = useState(false);
+
+  useEffect(() => setInBrowser(true), []);
 
   const preview = useMemo(() => buildPreviewConfig(values), [values]);
-  const result = useMemo(
-    () =>
-      preview
-        ? runPreview({
-            config: preview.config,
-            discountClasses: preview.discountClasses,
-            lines,
-            shopper,
-          })
-        : null,
-    [preview, lines, shopper],
-  );
+  const result = useMemo(() => {
+    if (!inBrowser || !preview) return null;
+
+    // The preview must never take the form down with it.
+    try {
+      return runPreview({
+        config: preview.config,
+        discountClasses: preview.discountClasses,
+        lines,
+        shopper,
+      });
+    } catch (error) {
+      console.error("Live preview failed", error);
+      return null;
+    }
+  }, [inBrowser, preview, lines, shopper]);
 
   if (!preview || !result) return null;
 

@@ -275,6 +275,11 @@ route exists and Shopify wants a session. A real missing route returns 404.
 - **`extensions/tiered-discount/generated/api.ts` is committed** because the
   app imports the Function code for the live preview. After changing a
   Function `.graphql` file, regenerate it (section 7) and commit it.
+- **Nothing rendered on the server may depend on the viewer's locale**
+  (`Intl` dates or money without a fixed locale). If the server and the browser
+  write it differently, React throws the server markup away and rebuilds the
+  page, and App Bridge's title bar buttons (Save, Cancel) stop working. The live
+  preview panel renders only in the browser for this reason.
 - **Browser code must not import values from `*.server.ts`.** Type only
   imports are fine. React Router strips server code only from `loader`,
   `action`, `middleware` and `headers`. Typecheck does not catch this; the
