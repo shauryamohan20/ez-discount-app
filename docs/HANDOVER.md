@@ -380,6 +380,11 @@ The real error only appears with `shopify app dev --verbose`, in lines starting
   entry points and latest Function reach the live app.
 - Set the App Store listing name and support website in the Partner Dashboard.
   Nothing in the code controls those.
+- Upload the app icon in the Dev Dashboard (app > Settings, App icon) and
+  later in the App Store listing. Use `docs/assets/app-icon-1200.png`: the
+  owner's logo (`docs/assets/logo-source.png`, 1000 x 1000) centred on a
+  1200 x 1200 canvas of its own navy, which gives the 75px clear margin
+  Shopify asks for. The icon is not set in `shopify.app.toml`.
 - Test Buy X Get Y in the dev store with the checklist in section 11.
 
 ---
