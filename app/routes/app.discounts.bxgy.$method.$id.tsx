@@ -13,6 +13,10 @@ import {
 import { boundary } from "@shopify/shopify-app-react-router/server";
 
 import { authenticate } from "../shopify.server";
+import {
+  DiscountFormActions,
+  savingAsFrom,
+} from "../components/DiscountFormActions";
 import { TieredDiscountForm } from "../components/TieredDiscountForm";
 import { DiscountNotFound } from "../components/DiscountNotFound";
 import { blankBxgyForm, bxgyToFormValues } from "../lib/bxgy-form";
@@ -91,7 +95,12 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
       : blankBxgyForm(),
   };
 
-  return { values, currencyCode, usageCount: discount.usageCount };
+  return {
+    values,
+    currencyCode,
+    usageCount: discount.usageCount,
+    isDraft: discount.status === "DRAFT",
+  };
 };
 
 export const action = async ({ request, params }: ActionFunctionArgs) => {
@@ -108,12 +117,15 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
 
   if (!result.ok) return result;
 
-  return redirect("/app/discounts/bxgy?toast=updated");
+  return redirect(
+    `/app/discounts/bxgy?toast=${result.draft ? "drafted" : "updated"}`,
+  );
 };
 
 export default function EditBuyXGetYPage() {
   const {
     values: loadedValues,
+    isDraft,
     currencyCode,
     usageCount,
   } = useLoaderData<typeof loader>();
@@ -129,7 +141,7 @@ export default function EditBuyXGetYPage() {
     : (serverResult?.errors ?? {});
   const formError = serverResult?.formError ?? null;
 
-  const save = () => {
+  const save = (saveAs: "save" | "draft") => {
     const validation = validateDiscountForm(values);
 
     if (!validation.ok) {
@@ -138,7 +150,7 @@ export default function EditBuyXGetYPage() {
     }
 
     setClientErrors({});
-    fetcher.submit(formValuesToSubmission(values), { method: "POST" });
+    fetcher.submit(formValuesToSubmission(values, saveAs), { method: "POST" });
   };
 
   return (
@@ -147,18 +159,13 @@ export default function EditBuyXGetYPage() {
         Buy X Get Y discounts
       </s-link>
 
-      <s-button
-        slot="primary-action"
-        variant="primary"
-        onClick={save}
-        {...(saving ? { loading: true } : {})}
-      >
-        Save
-      </s-button>
-
-      <s-button slot="secondary-actions" href="/app/discounts/bxgy">
-        Cancel
-      </s-button>
+      <DiscountFormActions
+        saving={saving}
+        savingAs={savingAsFrom(fetcher.formData)}
+        isDraft={isDraft}
+        cancelHref="/app/discounts/bxgy"
+        onSave={save}
+      />
 
       {values.method === "code" && usageCount > 0 && (
         <s-banner slot="supplemental-start" tone="info">

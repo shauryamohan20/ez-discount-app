@@ -8,6 +8,10 @@ import { useFetcher, useLoaderData, useRouteError } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 
 import { authenticate } from "../shopify.server";
+import {
+  DiscountFormActions,
+  savingAsFrom,
+} from "../components/DiscountFormActions";
 import { TieredDiscountForm } from "../components/TieredDiscountForm";
 import {
   blankDiscountForm,
@@ -45,7 +49,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
   if (!result.ok) return result;
 
-  return redirect("/app/discounts/bxgy?toast=created");
+  return redirect(
+    `/app/discounts/bxgy?toast=${result.draft ? "drafted" : "created"}`,
+  );
 };
 
 export default function NewBuyXGetYPage() {
@@ -64,7 +70,7 @@ export default function NewBuyXGetYPage() {
     : (serverResult?.errors ?? {});
   const formError = serverResult?.formError ?? null;
 
-  const save = () => {
+  const save = (saveAs: "save" | "draft") => {
     const validation = validateDiscountForm(values);
 
     if (!validation.ok) {
@@ -73,7 +79,7 @@ export default function NewBuyXGetYPage() {
     }
 
     setClientErrors({});
-    fetcher.submit(formValuesToSubmission(values), { method: "POST" });
+    fetcher.submit(formValuesToSubmission(values, saveAs), { method: "POST" });
   };
 
   return (
@@ -82,18 +88,12 @@ export default function NewBuyXGetYPage() {
         Buy X Get Y discounts
       </s-link>
 
-      <s-button
-        slot="primary-action"
-        variant="primary"
-        onClick={save}
-        {...(saving ? { loading: true } : {})}
-      >
-        Save
-      </s-button>
-
-      <s-button slot="secondary-actions" href="/app/discounts/bxgy">
-        Cancel
-      </s-button>
+      <DiscountFormActions
+        saving={saving}
+        savingAs={savingAsFrom(fetcher.formData)}
+        cancelHref="/app/discounts/bxgy"
+        onSave={save}
+      />
 
       {formError && (
         <s-banner

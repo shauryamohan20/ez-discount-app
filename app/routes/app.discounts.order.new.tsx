@@ -4,27 +4,26 @@ import type {
   HeadersFunction,
   LoaderFunctionArgs,
 } from "react-router";
-import {
-  useFetcher,
-  useLoaderData,
-  useRouteError,
-} from "react-router";
+import { useFetcher, useLoaderData, useRouteError } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 
 import { authenticate } from "../shopify.server";
-import { TieredDiscountForm } from "../components/TieredDiscountForm";
 import {
+  DiscountFormActions,
+  savingAsFrom,
+} from "../components/DiscountFormActions";
+import { TieredDiscountForm } from "../components/TieredDiscountForm";
+import { saveDiscountFromForm } from "../models/discount-save.server";
+import {
+  formValuesToSubmission,
   blankDiscountForm,
-  discountFormValuesFromFormData,
   hasErrors,
-  mapUserErrors,
   validateDiscountForm,
   type DiscountFormErrors,
   type DiscountFormValues,
 } from "../lib/discount-form";
-import { calendarDateToShopIso, todayInShop } from "../lib/shop-time";
+import { todayInShop } from "../lib/shop-time";
 import {
-  createTieredDiscount,
   getShopCurrencyCode,
   getShopTimezoneOffsetMinutes,
 } from "../models/discounts.server";
@@ -45,71 +44,17 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 export const action = async ({ request }: ActionFunctionArgs) => {
   const { admin, redirect } = await authenticate.admin(request);
 
-  const formData = await request.formData();
-  const values = discountFormValuesFromFormData(formData);
-  const validation = validateDiscountForm(values);
+  const result = await saveDiscountFromForm(
+    admin,
+    await request.formData(),
+    null,
+  );
 
-  if (!validation.ok) {
-    return { errors: validation.errors, formError: null };
-  }
+  if (!result.ok) return result;
 
-  try {
-    const offsetMinutes = await getShopTimezoneOffsetMinutes(admin);
-    const {
-      discountType,
-      method,
-      code,
-      usageLimit,
-      appliesOncePerCustomer,
-      title,
-      startDate,
-      endDate,
-      combinesWithShipping,
-      combinesWithOtherDiscounts,
-      appliesTo,
-      customerEligibility,
-      tiers,
-      orderTiers,
-    } = validation.value;
-
-    const result = await createTieredDiscount(admin, {
-      discountType,
-      method,
-      code,
-      usageLimit,
-      appliesOncePerCustomer,
-      title,
-      startsAt: calendarDateToShopIso(startDate, offsetMinutes),
-      endsAt: endDate
-        ? calendarDateToShopIso(endDate, offsetMinutes, true)
-        : null,
-      combinesWithShipping,
-      combinesWithOtherDiscounts,
-      appliesTo,
-      customerEligibility,
-      tiers,
-      orderTiers,
-    });
-
-    if (!result.ok) {
-      const { errors, unmapped } = mapUserErrors(result.userErrors);
-
-      return {
-        errors,
-        formError: unmapped.length ? unmapped.join(" ") : null,
-      };
-    }
-
-    return redirect("/app/discounts/order?toast=created");
-  } catch (error) {
-    return {
-      errors: {} as DiscountFormErrors,
-      formError:
-        error instanceof Error
-          ? error.message
-          : "Something went wrong saving the discount.",
-    };
-  }
+  return redirect(
+    `/app/discounts/order?toast=${result.draft ? "drafted" : "created"}`,
+  );
 };
 
 export default function NewOrderDiscountPage() {
@@ -127,7 +72,7 @@ export default function NewOrderDiscountPage() {
     : (fetcher.data?.errors ?? {});
   const formError = fetcher.data?.formError ?? null;
 
-  const save = () => {
+  const save = (saveAs: "save" | "draft") => {
     const validation = validateDiscountForm(values);
 
     if (!validation.ok) {
@@ -136,27 +81,7 @@ export default function NewOrderDiscountPage() {
     }
 
     setClientErrors({});
-    fetcher.submit(
-      {
-        discountType: values.discountType,
-        method: values.method,
-        code: values.code,
-        usageLimit: values.usageLimit,
-        appliesOncePerCustomer: String(values.appliesOncePerCustomer),
-        title: values.title,
-        startDate: values.startDate,
-        endDate: values.endDate,
-        combinesWithShipping: String(values.combinesWithShipping),
-        combinesWithOtherDiscounts: String(values.combinesWithOtherDiscounts),
-        appliesToType: values.appliesToType,
-        customerEligibility: values.customerEligibility,
-        products: JSON.stringify(values.products),
-        collections: JSON.stringify(values.collections),
-        tiers: JSON.stringify(values.tiers),
-        orderTiers: JSON.stringify(values.orderTiers),
-      },
-      { method: "POST" },
-    );
+    fetcher.submit(formValuesToSubmission(values, saveAs), { method: "POST" });
   };
 
   return (
@@ -165,18 +90,12 @@ export default function NewOrderDiscountPage() {
         Whole order discounts
       </s-link>
 
-      <s-button
-        slot="primary-action"
-        variant="primary"
-        onClick={save}
-        {...(saving ? { loading: true } : {})}
-      >
-        Save
-      </s-button>
-
-      <s-button slot="secondary-actions" href="/app/discounts/order">
-        Cancel
-      </s-button>
+      <DiscountFormActions
+        saving={saving}
+        savingAs={savingAsFrom(fetcher.formData)}
+        cancelHref="/app/discounts/order"
+        onSave={save}
+      />
 
       {formError && (
         <s-banner

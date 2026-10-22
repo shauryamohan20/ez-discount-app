@@ -466,7 +466,10 @@ export function validateDiscountForm(
 
     const maxDiscountedUnits = parseNumber(row.maxDiscountedUnits);
     if (row.maxDiscountedUnits.trim() !== "") {
-      if (maxDiscountedUnits === null || !Number.isInteger(maxDiscountedUnits)) {
+      if (
+        maxDiscountedUnits === null ||
+        !Number.isInteger(maxDiscountedUnits)
+      ) {
         rowErrors.maxDiscountedUnits = "Use a whole number.";
       } else if (maxDiscountedUnits < 1) {
         rowErrors.maxDiscountedUnits = "Use 1 or more.";
@@ -621,8 +624,10 @@ export function discountFormValuesFromFormData(
  */
 export function formValuesToSubmission(
   values: DiscountFormValues,
+  saveAs: "save" | "draft" = "save",
 ): Record<string, string> {
   return {
+    saveAs,
     discountType: values.discountType,
     method: values.method,
     code: values.code,

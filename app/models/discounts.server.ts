@@ -30,7 +30,49 @@ import {
   type DiscountMethod,
 } from "../lib/discount-id";
 
-export type DiscountStatus = "ACTIVE" | "EXPIRED" | "SCHEDULED";
+/**
+ * Shopify's three statuses, plus DRAFT, which the app adds. Shopify has no
+ * draft discounts, so a draft is stored as a discount scheduled to start on
+ * DRAFT_STARTS_AT, which can never apply, with the merchant's own dates kept
+ * in the draft metafield. The app shows a draft with those dates.
+ */
+export type DiscountStatus = "ACTIVE" | "EXPIRED" | "SCHEDULED" | "DRAFT";
+
+/** Where a draft's Shopify start date is parked. */
+export const DRAFT_STARTS_AT = "2099-01-01T00:00:00Z";
+
+const DRAFT_METAFIELD_KEY = "draft";
+
+/** The draft metafield: the merchant's own dates, kept while it is a draft. */
+type DraftState =
+  | { isDraft: true; startsAt: string; endsAt: string | null }
+  | { isDraft: false };
+
+function parseDraftState(jsonValue: unknown): DraftState {
+  if (typeof jsonValue !== "object" || jsonValue === null) {
+    return { isDraft: false };
+  }
+
+  const value = jsonValue as Record<string, unknown>;
+  if (value.isDraft !== true || typeof value.startsAt !== "string") {
+    return { isDraft: false };
+  }
+
+  return {
+    isDraft: true,
+    startsAt: value.startsAt,
+    endsAt: typeof value.endsAt === "string" ? value.endsAt : null,
+  };
+}
+
+function draftMetafield(state: DraftState) {
+  return {
+    namespace: TIER_METAFIELD_NAMESPACE,
+    key: DRAFT_METAFIELD_KEY,
+    type: TIER_METAFIELD_TYPE,
+    value: JSON.stringify(state),
+  };
+}
 
 export type TieredDiscount = {
   /** gid://shopify/DiscountAutomaticNode/... or .../DiscountCodeNode/... */
@@ -60,6 +102,7 @@ type GraphqlResponse<T> = {
 type DiscountNodePayload = {
   id: string;
   metafield: { jsonValue: unknown } | null;
+  draftMetafield: { jsonValue: unknown } | null;
   discount: {
     __typename: string;
     title?: string;
@@ -86,6 +129,9 @@ const DISCOUNT_NODE_FRAGMENT = `#graphql
   fragment TieredDiscountNode on DiscountNode {
     id
     metafield(namespace: "$app:tiered", key: "config") {
+      jsonValue
+    }
+    draftMetafield: metafield(namespace: "$app:tiered", key: "draft") {
       jsonValue
     }
     discount {
@@ -221,13 +267,24 @@ function toTieredDiscount(node: DiscountNodePayload): TieredDiscount | null {
 
   const parsedConfig = parseTierConfig(node.metafield.jsonValue);
 
+  // A draft shows the merchant's own dates, not the parked start date. One
+  // that was turned on from Shopify's own Discounts page is no longer a draft,
+  // whatever the metafield still says.
+  const draft = parseDraftState(node.draftMetafield?.jsonValue);
+  const shopifyStatus = node.discount.status ?? "EXPIRED";
+  const isDraft = draft.isDraft && shopifyStatus !== "ACTIVE";
+
   return {
     id,
     method,
     title: node.discount.title ?? "",
-    status: node.discount.status ?? "EXPIRED",
-    startsAt: node.discount.startsAt ?? "",
-    endsAt: node.discount.endsAt ?? null,
+    status: isDraft ? "DRAFT" : shopifyStatus,
+    startsAt:
+      draft.isDraft && isDraft
+        ? draft.startsAt
+        : (node.discount.startsAt ?? ""),
+    endsAt:
+      draft.isDraft && isDraft ? draft.endsAt : (node.discount.endsAt ?? null),
     combinesWithShipping:
       node.discount.combinesWith?.shippingDiscounts ?? false,
     // An order discount combines outward with product discounts and the other
@@ -331,6 +388,8 @@ export type TieredDiscountInput = {
   orderTiers: OrderTier[];
   /** Buy X Get Y settings, used only for that type. */
   bxgy?: BuyXGetY | null;
+  /** Save as a draft: parked so it cannot apply, with these dates kept. */
+  draft?: boolean;
 };
 
 export type DiscountUserError = {
@@ -412,8 +471,8 @@ function toDiscountInput(input: TieredDiscountInput) {
 
   return {
     title: input.title,
-    startsAt: input.startsAt,
-    endsAt: input.endsAt,
+    startsAt: input.draft ? DRAFT_STARTS_AT : input.startsAt,
+    endsAt: input.draft ? null : input.endsAt,
     discountClasses: discountClassesFor(input.discountType, input.orderTiers),
     combinesWith: {
       // A discount never stacks with others of its own class. The merchant
@@ -439,6 +498,12 @@ function toDiscountInput(input: TieredDiscountInput) {
         type: TIER_METAFIELD_TYPE,
         value: variables,
       },
+      // Always written, so a normal save also publishes a draft.
+      draftMetafield(
+        input.draft
+          ? { isDraft: true, startsAt: input.startsAt, endsAt: input.endsAt }
+          : { isDraft: false },
+      ),
     ],
   };
 }
@@ -598,6 +663,77 @@ export async function updateTieredDiscount(
   }
 
   return { ok: true, id: payload.automaticAppDiscount.discountId };
+}
+
+/** Updates only the given fields of a discount, for either method. */
+async function updateDiscountFields(
+  admin: AdminApiContext,
+  discount: TieredDiscount,
+  fields: Record<string, unknown>,
+): Promise<MutationResult> {
+  if (discount.method === "code") {
+    const data = await adminRequest<{
+      discountCodeAppUpdate: {
+        codeAppDiscount: { discountId: string } | null;
+        userErrors: DiscountUserError[];
+      };
+    }>(admin, UPDATE_CODE_MUTATION, { id: discount.id, discount: fields });
+
+    const payload = data.discountCodeAppUpdate;
+    if (payload.userErrors.length > 0 || !payload.codeAppDiscount) {
+      return failed(payload.userErrors, "Shopify did not return the discount.");
+    }
+
+    return { ok: true, id: payload.codeAppDiscount.discountId };
+  }
+
+  const data = await adminRequest<{
+    discountAutomaticAppUpdate: {
+      automaticAppDiscount: { discountId: string } | null;
+      userErrors: DiscountUserError[];
+    };
+  }>(admin, UPDATE_DISCOUNT_MUTATION, { id: discount.id, discount: fields });
+
+  const payload = data.discountAutomaticAppUpdate;
+  if (payload.userErrors.length > 0 || !payload.automaticAppDiscount) {
+    return failed(payload.userErrors, "Shopify did not return the discount.");
+  }
+
+  return { ok: true, id: payload.automaticAppDiscount.discountId };
+}
+
+/**
+ * Gives a draft its own dates back, so it runs on them. A start date already
+ * past makes it active straight away, and an end date already past leaves it
+ * expired.
+ */
+export async function publishTieredDiscount(
+  admin: AdminApiContext,
+  discount: TieredDiscount,
+): Promise<MutationResult> {
+  return updateDiscountFields(admin, discount, {
+    startsAt: discount.startsAt,
+    endsAt: discount.endsAt,
+    metafields: [draftMetafield({ isDraft: false })],
+  });
+}
+
+/** Parks a discount as a draft, keeping its current dates for publishing. */
+export async function moveTieredDiscountToDraft(
+  admin: AdminApiContext,
+  discount: TieredDiscount,
+): Promise<MutationResult> {
+  return updateDiscountFields(admin, discount, {
+    startsAt: DRAFT_STARTS_AT,
+    endsAt: null,
+    metafields: [
+      draftMetafield({
+        isDraft: true,
+        startsAt: discount.startsAt,
+        endsAt: discount.endsAt,
+      }),
+    ],
+  });
 }
 
 const ACTIVATE_DISCOUNT_MUTATION = `#graphql
@@ -904,6 +1040,23 @@ export async function runDiscountRowAction(
         result = await deleteTieredDiscount(admin, id);
         message = "Discount deleted";
         break;
+      case "publish":
+      case "draft": {
+        const discount = await getTieredDiscount(admin, id);
+        if (!discount) {
+          return { ok: false, message: "That discount could not be found." };
+        }
+
+        result =
+          intent === "publish"
+            ? await publishTieredDiscount(admin, discount)
+            : await moveTieredDiscountToDraft(admin, discount);
+        message =
+          intent === "publish"
+            ? "Discount published"
+            : "Discount moved to drafts";
+        break;
+      }
       default:
         return { ok: false, message: "That action is not supported." };
     }

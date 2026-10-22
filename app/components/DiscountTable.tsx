@@ -20,18 +20,23 @@ const STATUS_LABELS: Record<DiscountStatus, string> = {
   ACTIVE: "Active",
   SCHEDULED: "Scheduled",
   EXPIRED: "Expired",
+  DRAFT: "Draft",
 };
 
-const STATUS_TONES: Record<DiscountStatus, "success" | "info" | "neutral"> = {
+const STATUS_TONES: Record<
+  DiscountStatus,
+  "success" | "info" | "neutral" | "caution"
+> = {
   ACTIVE: "success",
   SCHEDULED: "info",
   EXPIRED: "neutral",
+  DRAFT: "caution",
 };
 
 type RowActionResult = { ok: boolean; message: string } | undefined;
 
 type PendingAction = {
-  intent: "activate" | "delete";
+  intent: "activate" | "delete" | "publish";
   id: string;
   method: string;
   heading: string;
@@ -107,6 +112,23 @@ export function DiscountTable({
     });
   };
 
+  const askPublish = (discount: TieredDiscount, numericId: string) => {
+    const starts = formatShopDate(discount.startsAt, offsetMinutes);
+    const ends = discount.endsAt
+      ? ` and ends on ${formatShopDate(discount.endsAt, offsetMinutes)}`
+      : ", with no end date";
+
+    setPending({
+      intent: "publish",
+      id: numericId,
+      method: discount.method,
+      heading: "Publish this draft?",
+      body: `${discount.title} starts on ${starts}${ends}. If the start date has passed, it starts applying at checkout straight away.`,
+      confirmLabel: "Publish",
+      critical: false,
+    });
+  };
+
   const askDelete = (discount: TieredDiscount, numericId: string) => {
     setPending({
       intent: "delete",
@@ -173,7 +195,10 @@ export function DiscountTable({
                   </s-table-cell>
 
                   <s-table-cell>
-                    <s-badge tone={STATUS_TONES[discount.status]}>
+                    <s-badge
+                      tone={STATUS_TONES[discount.status]}
+                      {...(discount.status === "DRAFT" ? { icon: "edit" } : {})}
+                    >
                       {STATUS_LABELS[discount.status]}
                     </s-badge>
                   </s-table-cell>
@@ -228,6 +253,17 @@ export function DiscountTable({
                           }
                         >
                           Deactivate
+                        </s-button>
+                      ) : discount.status === "DRAFT" ? (
+                        <s-button
+                          variant="tertiary"
+                          commandFor={CONFIRM_MODAL_ID}
+                          command="--show"
+                          {...(busy ? { disabled: true } : {})}
+                          {...(rowBusy ? { loading: true } : {})}
+                          onClick={() => askPublish(discount, numericId)}
+                        >
+                          Publish
                         </s-button>
                       ) : (
                         <s-button

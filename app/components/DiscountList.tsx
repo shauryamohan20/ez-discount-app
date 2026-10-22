@@ -9,6 +9,7 @@ import { APP_NAME } from "../lib/brand";
 const TOAST_MESSAGES: Record<string, string> = {
   created: "Discount created",
   updated: "Discount updated",
+  drafted: "Discount saved as draft",
 };
 
 type Props = {

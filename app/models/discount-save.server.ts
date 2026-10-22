@@ -14,7 +14,7 @@ import {
 } from "./discounts.server";
 
 export type SaveResult =
-  | { ok: true }
+  | { ok: true; draft: boolean }
   | { ok: false; errors: DiscountFormErrors; formError: string | null };
 
 /**
@@ -23,7 +23,8 @@ export type SaveResult =
  * request cannot skip it. Shopify's own errors come back against the field
  * they belong to where possible, and in a banner otherwise.
  *
- * Pass the discount's ID to update it, or null to create one.
+ * Pass the discount's ID to update it, or null to create one. A form sent
+ * with saveAs=draft is saved as a draft, which cannot apply until published.
  */
 export async function saveDiscountFromForm(
   admin: AdminApiContext,
@@ -42,8 +43,10 @@ export async function saveDiscountFromForm(
     const offsetMinutes = await getShopTimezoneOffsetMinutes(admin);
     const { startDate, endDate, ...rest } = validation.value;
 
+    const draft = formData.get("saveAs") === "draft";
     const input = {
       ...rest,
+      draft,
       startsAt: calendarDateToShopIso(startDate, offsetMinutes),
       endsAt: endDate
         ? calendarDateToShopIso(endDate, offsetMinutes, true)
@@ -72,7 +75,7 @@ export async function saveDiscountFromForm(
       };
     }
 
-    return { ok: true };
+    return { ok: true, draft };
   } catch (error) {
     return {
       ok: false,

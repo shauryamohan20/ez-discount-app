@@ -116,6 +116,14 @@ own tab in the app:
   (order for product kinds, product for order); a checkbox for shipping.
 - List, create, edit, activate, deactivate (with confirmation, because
   activating rewrites dates), delete (with confirmation).
+- Drafts. Shopify has no draft discounts, so the app makes its own: a draft
+  is saved in Shopify with its start date parked on 1 Jan 2099
+  (`DRAFT_STARTS_AT`), so it can never apply, and the merchant's own dates
+  are kept in the `draft` metafield. The app shows a draft as "Draft" with
+  those dates; Shopify's own Discounts page shows it as Scheduled for 2099.
+  Every create and edit page has Save as draft; editing a draft shows
+  Publish instead of Save. A draft row has a Publish action, which restores
+  the dates. A draft turned on from Shopify's own admin counts as active.
 - Method (automatic or code) and kind are locked after creation.
 
 **Other pages**
@@ -197,6 +205,9 @@ refuses to edit a version newer than it knows.
 `get.value` is a tagged object so a fixed amount can be added later as
 `{"fixedAmount": 5}` without a migration.
 
+`draft`, always written on save: `{"isDraft":false}`, or
+`{"isDraft":true,"startsAt":"<ISO>","endsAt":"<ISO>"|null}` for a draft.
+
 `input-variables`, always written with all three keys:
 
 ```json
@@ -239,8 +250,9 @@ order thresholds.
   250, `runDiscountRowAction`, `discountEditPath`,
   `findTieredDiscountByNumericId`.
 - `discount-save.server.ts`: `saveDiscountFromForm`, validate then create or
-  update. Used by the Buy X Get Y pages; the older pages have the same steps
-  inline.
+  update, as a draft when the form sends `saveAs=draft`. Used by every create
+  and edit page. `publishTieredDiscount` and `moveTieredDiscountToDraft` in
+  `discounts.server.ts` update only the dates and the draft flag.
 - `discount-routing.server.ts`: `redirectToDiscount` for links that carry only
   a numeric ID.
 
@@ -248,6 +260,8 @@ order thresholds.
 - `TieredDiscountForm.tsx`: the shared form shell (method, details, applies
   to, customers, tiers or thresholds). Renders `BuyXGetYFields` for that kind.
 - `BuyXGetYFields.tsx`, `ResourceSelector.tsx` (Shopify resource picker).
+- `DiscountFormActions.tsx`: the page buttons every create and edit page
+  shares (Save or Publish, Save as draft, Cancel) and the draft banner.
 - `DiscountPreviewPanel.tsx`: the live preview beside the form.
   `TieredDiscountForm` lays the form and the panel out in an `s-grid` (equal
   halves, one column under 1100px of container width); the panel is sticky
@@ -462,8 +476,6 @@ Smaller items noted along the way:
 - A "combine with other product discounts" option (the owner's "Option B").
 - Quantity tier unit caps take units in cart order; cheapest first would be
   kinder to customers.
-- The older create and edit pages could use `saveDiscountFromForm` and
-  `formValuesToSubmission` like the Buy X Get Y pages.
 
 ---
 
