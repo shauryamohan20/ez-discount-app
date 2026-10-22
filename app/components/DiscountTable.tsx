@@ -257,75 +257,73 @@ export function DiscountTable({
         </s-banner>
       )}
 
+      {/* Bulk edit: its own bar, directly above the list. */}
+      <s-section padding="base" accessibilityLabel="Bulk edit">
+        <s-stack
+          direction="inline"
+          gap="base"
+          alignItems="center"
+          justifyContent="space-between"
+        >
+          <s-stack direction="inline" gap="small-200" alignItems="center">
+            <s-text type="strong">
+              {selected.size > 0 ? `${selected.size} selected` : "Bulk edit"}
+            </s-text>
+            <s-text color="subdued">
+              {selected.size === 0
+                ? "Tick discounts to publish, move to draft or delete them together."
+                : (selectionNote ?? "")}
+            </s-text>
+          </s-stack>
+
+          <s-stack direction="inline" gap="small-200">
+            <s-button
+              commandFor={BULK_MODAL_ID}
+              command="--show"
+              {...(selected.size === 0 || anyActive || busy
+                ? { disabled: true }
+                : {})}
+              {...(busyIntent === "bulk-publish" ? { loading: true } : {})}
+              onClick={() => setBulkIntent("bulk-publish")}
+            >
+              Publish
+            </s-button>
+            <s-button
+              commandFor={BULK_MODAL_ID}
+              command="--show"
+              {...(selected.size === 0 || anyDraft || busy
+                ? { disabled: true }
+                : {})}
+              {...(busyIntent === "bulk-draft" ? { loading: true } : {})}
+              onClick={() => setBulkIntent("bulk-draft")}
+            >
+              Move to draft
+            </s-button>
+            <s-button
+              tone="critical"
+              commandFor={BULK_MODAL_ID}
+              command="--show"
+              {...(selected.size === 0 || busy ? { disabled: true } : {})}
+              {...(busyIntent === "bulk-delete" ? { loading: true } : {})}
+              onClick={() => setBulkIntent("bulk-delete")}
+            >
+              Delete
+            </s-button>
+            {selected.size > 0 && (
+              <s-button
+                variant="tertiary"
+                {...(busy ? { disabled: true } : {})}
+                onClick={() => setSelected(new Set())}
+              >
+                Clear selection
+              </s-button>
+            )}
+          </s-stack>
+        </s-stack>
+      </s-section>
+
       <s-section padding="none" {...(heading ? { heading } : {})}>
         <s-table variant="auto">
-          {/* Bulk edit, always on top of the list. */}
-          <s-box slot="filters" padding="base">
-            <s-stack
-              direction="inline"
-              gap="base"
-              alignItems="center"
-              justifyContent="space-between"
-            >
-              <s-stack direction="inline" gap="small-200" alignItems="center">
-                <s-text type="strong">
-                  {selected.size > 0
-                    ? `${selected.size} selected`
-                    : "Bulk edit"}
-                </s-text>
-                <s-text color="subdued">
-                  {selected.size === 0
-                    ? "Tick discounts to publish, move to draft or delete them together."
-                    : (selectionNote ?? "")}
-                </s-text>
-              </s-stack>
-
-              <s-stack direction="inline" gap="small-200">
-                <s-button
-                  commandFor={BULK_MODAL_ID}
-                  command="--show"
-                  {...(selected.size === 0 || anyActive || busy
-                    ? { disabled: true }
-                    : {})}
-                  {...(busyIntent === "bulk-publish" ? { loading: true } : {})}
-                  onClick={() => setBulkIntent("bulk-publish")}
-                >
-                  Publish
-                </s-button>
-                <s-button
-                  commandFor={BULK_MODAL_ID}
-                  command="--show"
-                  {...(selected.size === 0 || anyDraft || busy
-                    ? { disabled: true }
-                    : {})}
-                  {...(busyIntent === "bulk-draft" ? { loading: true } : {})}
-                  onClick={() => setBulkIntent("bulk-draft")}
-                >
-                  Move to draft
-                </s-button>
-                <s-button
-                  tone="critical"
-                  commandFor={BULK_MODAL_ID}
-                  command="--show"
-                  {...(selected.size === 0 || busy ? { disabled: true } : {})}
-                  {...(busyIntent === "bulk-delete" ? { loading: true } : {})}
-                  onClick={() => setBulkIntent("bulk-delete")}
-                >
-                  Delete
-                </s-button>
-                {selected.size > 0 && (
-                  <s-button
-                    variant="tertiary"
-                    {...(busy ? { disabled: true } : {})}
-                    onClick={() => setSelected(new Set())}
-                  >
-                    Clear selection
-                  </s-button>
-                )}
-              </s-stack>
-            </s-stack>
-          </s-box>
-
           <s-table-header-row>
             <s-table-header listSlot="primary">
               <s-stack direction="inline" gap="small" alignItems="center">

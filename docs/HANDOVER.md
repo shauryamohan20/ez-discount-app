@@ -131,7 +131,8 @@ own tab in the app:
   Publish instead of Save. A draft row has a Publish action, which restores
   the dates. A draft turned on from Shopify's own admin counts as active.
 - Bulk edit on every list (Home and each kind): a checkbox per row, select
-  all in the header, and a bar on top of the list with Publish, Move to
+  all in the header, and a separate bar (its own card) above the list with
+  Publish, Move to
   draft and Delete, each asking first. Move to draft is off when any
   selected discount is a draft, and Publish when any is active; a line in
   the bar says why. `runDiscountRowAction` handles `bulk-*` intents: up to 250
