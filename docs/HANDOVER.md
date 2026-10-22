@@ -462,9 +462,19 @@ If it is broken again: stop the dev server with Ctrl+C, run
 `pnpm run dev`. Installing `@shopify/cli` as a project devDependency would
 remove the problem for good; it was proposed and not yet approved.
 
-**"Error while polling app logs"** repeats in the dev terminal. Not diagnosed.
-The real error only appears with `shopify app dev --verbose`, in lines starting
-`Errors:`.
+**Running any `shopify` command while the dev server is up can break the CLI.**
+Every command may start the background auto-upgrade, which then fails on the
+locked `cloudflared.exe`. This happened again on 23 October 2026 from a single
+`shopify app logs` run. Until auto-upgrade is off, do not run CLI commands
+beside a running dev server; use `node scripts/verify-function.mjs` and the
+`pnpm exec graphql-codegen` route for checks.
+
+**"Error while polling app logs"** repeats in the dev terminal. Harmless: it only
+affects showing Function run logs there. Likely cause (not confirmed): the dev
+server subscribes to app logs once at start, Shopify's subscription token
+expires after 30 minutes, and the poller keeps retrying with the expired token.
+A fresh `shopify app logs` subscribed and polled without error. Restarting the
+dev server clears it; Function runs are also in the Dev Dashboard under Logs.
 
 ---
 
