@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { DiscountFormValues } from "../lib/discount-form";
 import {
@@ -61,6 +61,74 @@ export function DiscountPreviewPanel({ values, currencyCode }: Props) {
 
   useEffect(() => setInBrowser(true), []);
 
+  // The whole panel fits on screen at any screen size, without scrolling
+  // inside it: when its content is taller than the space, the content is
+  // scaled down evenly until it fits, and it stays full size when there is
+  // room. The space runs from where the panel rests at the top of the page
+  // to the bottom of the screen. It is measured on load, on resize and when
+  // the content changes, not while scrolling, so the panel never changes
+  // size as the page scrolls. Below the form on narrow screens it can rest
+  // far down, so that distance counts for at most 120px.
+  const panelRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!inBrowser) return;
+
+    const panel = panelRef.current;
+    const content = contentRef.current;
+    if (!panel || !content) return;
+
+    let restingTop: number | null = null;
+    let frame = 0;
+
+    const fit = () => {
+      const top = panel.getBoundingClientRect().top;
+      if (restingTop === null || window.scrollY === 0) {
+        restingTop = Math.min(Math.max(top, 16), 120);
+      }
+
+      const available = Math.max(200, window.innerHeight - restingTop - 16);
+      const width = panel.clientWidth;
+
+      // Content laid out wider and scaled down by the same factor fills the
+      // panel's width exactly. A wider layout is shorter, so a few rounds
+      // settle the scale.
+      let scale = 1;
+      content.style.transform = "";
+      content.style.width = "";
+      for (let round = 0; round < 4; round++) {
+        content.style.width = scale < 1 ? `${width / scale}px` : "";
+        const next = Math.min(1, available / content.offsetHeight);
+        if (Math.abs(next - scale) < 0.005) break;
+        scale = next;
+      }
+      content.style.width = scale < 1 ? `${width / scale}px` : "";
+      scale = Math.min(scale, available / content.offsetHeight, 1);
+
+      content.style.transformOrigin = "top left";
+      content.style.transform = scale < 1 ? `scale(${scale})` : "";
+      panel.style.height =
+        scale < 1 ? `${Math.ceil(content.offsetHeight * scale)}px` : "";
+    };
+
+    const schedule = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(fit);
+    };
+
+    fit();
+    const observer = new ResizeObserver(schedule);
+    observer.observe(content);
+    window.addEventListener("resize", schedule);
+
+    return () => {
+      cancelAnimationFrame(frame);
+      observer.disconnect();
+      window.removeEventListener("resize", schedule);
+    };
+  }, [inBrowser]);
+
   const preview = useMemo(() => buildPreview(values), [values]);
   const lines = useMemo<DemoLine[]>(
     () =>
@@ -119,82 +187,87 @@ export function DiscountPreviewPanel({ values, currencyCode }: Props) {
   ];
 
   return (
-    <div style={{ position: "sticky", top: "16px" }}>
-      <s-section heading="Demo cart">
-        <s-stack direction="block" gap="base">
-          {/* Details on the left and the cart on the right when the panel is
+    <div
+      ref={panelRef}
+      style={{ position: "sticky", top: "16px", overflow: "hidden" }}
+    >
+      <div ref={contentRef}>
+        <s-section heading="Demo cart">
+          <s-stack direction="block" gap="base">
+            {/* Details on the left and the cart on the right when the panel is
               wide enough, one above the other when it is not. */}
-          <s-query-container>
-            <s-grid
-              gridTemplateColumns="@container (inline-size > 640px) 1fr 1fr, 1fr"
-              gap="base"
-              alignItems="start"
-            >
-              <s-stack direction="block" gap="base">
-                <s-paragraph color="subdued">
-                  A demo cart, run through the same code Shopify uses at
-                  checkout. Change quantities to try it. Prices are examples.
-                </s-paragraph>
+            <s-query-container>
+              <s-grid
+                gridTemplateColumns="@container (inline-size > 640px) 1fr 1fr, 1fr"
+                gap="base"
+                alignItems="start"
+              >
+                <s-stack direction="block" gap="base">
+                  <s-paragraph color="subdued">
+                    A demo cart, run through the same code Shopify uses at
+                    checkout. Change quantities to try it. Prices are examples.
+                  </s-paragraph>
 
-                <s-select
-                  label="Shopper"
-                  value={shopper}
-                  onChange={(event) => {
-                    const next = event.currentTarget.value;
-                    if (isDemoShopper(next)) setShopper(next);
-                  }}
-                >
-                  {(Object.keys(DEMO_SHOPPER_LABELS) as DemoShopper[]).map(
-                    (key) => (
-                      <s-option key={key} value={key}>
-                        {DEMO_SHOPPER_LABELS[key]}
-                      </s-option>
-                    ),
-                  )}
-                </s-select>
-
-                <s-stack direction="inline">
-                  <s-button
-                    variant="secondary"
-                    icon="reset"
-                    {...(Object.keys(quantities).length === 0
-                      ? { disabled: true }
-                      : {})}
-                    onClick={() => setQuantities({})}
+                  <s-select
+                    label="Shopper"
+                    value={shopper}
+                    onChange={(event) => {
+                      const next = event.currentTarget.value;
+                      if (isDemoShopper(next)) setShopper(next);
+                    }}
                   >
-                    Reset demo cart
-                  </s-button>
+                    {(Object.keys(DEMO_SHOPPER_LABELS) as DemoShopper[]).map(
+                      (key) => (
+                        <s-option key={key} value={key}>
+                          {DEMO_SHOPPER_LABELS[key]}
+                        </s-option>
+                      ),
+                    )}
+                  </s-select>
+
+                  <s-stack direction="inline">
+                    <s-button
+                      variant="secondary"
+                      icon="reset"
+                      {...(Object.keys(quantities).length === 0
+                        ? { disabled: true }
+                        : {})}
+                      onClick={() => setQuantities({})}
+                    >
+                      Reset demo cart
+                    </s-button>
+                  </s-stack>
                 </s-stack>
-              </s-stack>
 
-              <DemoCart
-                lines={lines}
-                result={result}
-                notes={cartLineNotes(
-                  values,
-                  lines,
-                  result,
-                  qualifies,
-                  currencyCode,
-                )}
-                money={money}
-                onQuantity={changeQuantity}
-              />
-            </s-grid>
-          </s-query-container>
+                <DemoCart
+                  lines={lines}
+                  result={result}
+                  notes={cartLineNotes(
+                    values,
+                    lines,
+                    result,
+                    qualifies,
+                    currencyCode,
+                  )}
+                  money={money}
+                  onQuantity={changeQuantity}
+                />
+              </s-grid>
+            </s-query-container>
 
-          <s-divider />
+            <s-divider />
 
-          <s-stack direction="block" gap="small-200">
-            <s-heading>What happens</s-heading>
-            <s-unordered-list>
-              {explanations.map((text) => (
-                <s-list-item key={text}>{text}</s-list-item>
-              ))}
-            </s-unordered-list>
+            <s-stack direction="block" gap="small-200">
+              <s-heading>What happens</s-heading>
+              <s-unordered-list>
+                {explanations.map((text) => (
+                  <s-list-item key={text}>{text}</s-list-item>
+                ))}
+              </s-unordered-list>
+            </s-stack>
           </s-stack>
-        </s-stack>
-      </s-section>
+        </s-section>
+      </div>
     </div>
   );
 }

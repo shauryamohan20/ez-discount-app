@@ -290,7 +290,10 @@ order thresholds.
 - `DiscountPreviewPanel.tsx`: the live preview beside the form.
   `TieredDiscountForm` lays the form and the panel out in an `s-grid` (equal
   halves, one column under 1100px of container width); the panel is sticky
-  while the form scrolls. Inside the panel, details and the cart sit side by
+  while the form scrolls, and always fits on screen without scrolling inside
+  it: when its content is taller than the space, it is scaled down evenly
+  (measured on load, resize and content change, never while scrolling).
+  Inside the panel, details and the cart sit side by
   side above 640px of panel width, with "What happens" below both. `s-page`'s `aside` slot is not used, because
   it only exists at the default page width. A demo cart with quantity
   buttons, a shopper picker (guest, new, returning), totals with shipping, and
