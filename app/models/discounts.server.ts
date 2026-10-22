@@ -31,12 +31,22 @@ import {
 } from "../lib/discount-id";
 
 /**
- * Shopify's three statuses, plus DRAFT, which the app adds. Shopify has no
- * draft discounts, so a draft is stored as a discount scheduled to start on
- * DRAFT_STARTS_AT, which can never apply, with the merchant's own dates kept
- * in the draft metafield. The app shows a draft with those dates.
+ * The app shows two statuses, at the owner's request:
+ *
+ * - ACTIVE: running, or scheduled to start on a later date (the list shows
+ *   the start date).
+ * - DRAFT: not applying. Either an app draft (parked), or a discount whose
+ *   end date has passed, which Shopify calls expired.
+ *
+ * Shopify has no draft discounts, so an app draft is stored as a discount
+ * scheduled to start on DRAFT_STARTS_AT, which can never apply, with the
+ * merchant's own dates kept in the draft metafield. The app shows it with
+ * those dates.
  */
-export type DiscountStatus = "ACTIVE" | "EXPIRED" | "SCHEDULED" | "DRAFT";
+export type DiscountStatus = "ACTIVE" | "DRAFT";
+
+/** Shopify's own statuses, as the Admin API returns them. */
+type ShopifyDiscountStatus = "ACTIVE" | "EXPIRED" | "SCHEDULED";
 
 /** Where a draft's Shopify start date is parked. */
 export const DRAFT_STARTS_AT = "2099-01-01T00:00:00Z";
@@ -80,6 +90,11 @@ export type TieredDiscount = {
   method: DiscountMethod;
   title: string;
   status: DiscountStatus;
+  /**
+   * True for an app draft, whose own dates are kept in the draft metafield.
+   * False for a draft that is simply a discount whose end date has passed.
+   */
+  parked: boolean;
   startsAt: string;
   endsAt: string | null;
   combinesWithShipping: boolean;
@@ -106,7 +121,7 @@ type DiscountNodePayload = {
   discount: {
     __typename: string;
     title?: string;
-    status?: DiscountStatus;
+    status?: ShopifyDiscountStatus;
     startsAt?: string;
     endsAt?: string | null;
     combinesWith?: {
@@ -272,19 +287,18 @@ function toTieredDiscount(node: DiscountNodePayload): TieredDiscount | null {
   // whatever the metafield still says.
   const draft = parseDraftState(node.draftMetafield?.jsonValue);
   const shopifyStatus = node.discount.status ?? "EXPIRED";
-  const isDraft = draft.isDraft && shopifyStatus !== "ACTIVE";
+  const parked = draft.isDraft && shopifyStatus !== "ACTIVE";
 
   return {
     id,
     method,
     title: node.discount.title ?? "",
-    status: isDraft ? "DRAFT" : shopifyStatus,
+    status: parked || shopifyStatus === "EXPIRED" ? "DRAFT" : "ACTIVE",
+    parked,
     startsAt:
-      draft.isDraft && isDraft
-        ? draft.startsAt
-        : (node.discount.startsAt ?? ""),
+      draft.isDraft && parked ? draft.startsAt : (node.discount.startsAt ?? ""),
     endsAt:
-      draft.isDraft && isDraft ? draft.endsAt : (node.discount.endsAt ?? null),
+      draft.isDraft && parked ? draft.endsAt : (node.discount.endsAt ?? null),
     combinesWithShipping:
       node.discount.combinesWith?.shippingDiscounts ?? false,
     // An order discount combines outward with product discounts and the other
@@ -718,6 +732,20 @@ export async function publishTieredDiscount(
   });
 }
 
+/**
+ * Turns a draft on. An app draft gets its own dates back. A discount whose end
+ * date has passed is activated, which clears its end date, so it runs until
+ * it is moved back to draft.
+ */
+export async function publishDiscount(
+  admin: AdminApiContext,
+  discount: TieredDiscount,
+): Promise<MutationResult> {
+  return discount.parked
+    ? publishTieredDiscount(admin, discount)
+    : setTieredDiscountActive(admin, discount.id, true);
+}
+
 /** Parks a discount as a draft, keeping its current dates for publishing. */
 export async function moveTieredDiscountToDraft(
   admin: AdminApiContext,
@@ -1032,14 +1060,6 @@ export async function runDiscountRowAction(
     let message: string;
 
     switch (intent) {
-      case "activate":
-        result = await setTieredDiscountActive(admin, id, true);
-        message = "Discount activated";
-        break;
-      case "deactivate":
-        result = await setTieredDiscountActive(admin, id, false);
-        message = "Discount deactivated";
-        break;
       case "delete":
         result = await deleteTieredDiscount(admin, id);
         message = "Discount deleted";
@@ -1053,7 +1073,7 @@ export async function runDiscountRowAction(
 
         result =
           intent === "publish"
-            ? await publishTieredDiscount(admin, discount)
+            ? await publishDiscount(admin, discount)
             : await moveTieredDiscountToDraft(admin, discount);
         message =
           intent === "publish"
@@ -1092,13 +1112,11 @@ export type DiscountActionResult = {
   failures?: { title: string; message: string }[];
 };
 
-export type BulkIntent =
-  "bulk-activate" | "bulk-deactivate" | "bulk-draft" | "bulk-delete";
+export type BulkIntent = "bulk-publish" | "bulk-draft" | "bulk-delete";
 
 function isBulkIntent(intent: string): intent is BulkIntent {
   return (
-    intent === "bulk-activate" ||
-    intent === "bulk-deactivate" ||
+    intent === "bulk-publish" ||
     intent === "bulk-draft" ||
     intent === "bulk-delete"
   );
@@ -1113,16 +1131,15 @@ const BULK_CONCURRENCY = 4;
 const DISCOUNT_GID = /^gid:\/\/shopify\/Discount(Automatic|Code)Node\/\d+$/;
 
 const BULK_WORDS: Record<BulkIntent, { done: string; already: string }> = {
-  "bulk-activate": { done: "activated", already: "already active" },
-  "bulk-deactivate": { done: "deactivated", already: "already not active" },
+  "bulk-publish": { done: "published", already: "already active" },
   "bulk-draft": { done: "moved to drafts", already: "already drafts" },
   "bulk-delete": { done: "deleted", already: "already gone" },
 };
 
 /**
  * One discount through a bulk action. Each action does what makes sense for
- * the discount's state: activating a draft publishes it, and a discount
- * already in the requested state is skipped rather than changed again.
+ * the discount's state, and a discount already in the requested state is
+ * skipped rather than changed again.
  */
 async function applyBulkAction(
   admin: AdminApiContext,
@@ -1130,14 +1147,9 @@ async function applyBulkAction(
   discount: TieredDiscount,
 ): Promise<MutationResult | "skipped"> {
   switch (intent) {
-    case "bulk-activate":
+    case "bulk-publish":
       if (discount.status === "ACTIVE") return "skipped";
-      return discount.status === "DRAFT"
-        ? publishTieredDiscount(admin, discount)
-        : setTieredDiscountActive(admin, discount.id, true);
-    case "bulk-deactivate":
-      if (discount.status !== "ACTIVE") return "skipped";
-      return setTieredDiscountActive(admin, discount.id, false);
+      return publishDiscount(admin, discount);
     case "bulk-draft":
       if (discount.status === "DRAFT") return "skipped";
       return moveTieredDiscountToDraft(admin, discount);

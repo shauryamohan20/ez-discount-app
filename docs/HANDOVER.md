@@ -114,8 +114,14 @@ own tab in the app:
 - Start date and optional end date, in the shop's time zone.
 - Combination: never stacks with its own class; a checkbox for the other class
   (order for product kinds, product for order); a checkbox for shipping.
-- List, create, edit, activate, deactivate (with confirmation, because
-  activating rewrites dates), delete (with confirmation).
+- List, create, edit, publish, move to draft, delete (with confirmation).
+- Two statuses only, at the owner's request: **Active** (running, or
+  scheduled to start later; the list shows the start date) and **Draft** (an
+  app draft, or a discount whose end date has passed, which Shopify calls
+  expired). `TieredDiscount.parked` tells the two kinds of draft apart.
+  Publishing an app draft restores its dates; publishing an ended one
+  activates it, which clears its end date. There is no Deactivate: Move to
+  draft replaces it.
 - Drafts. Shopify has no draft discounts, so the app makes its own: a draft
   is saved in Shopify with its start date parked on 1 Jan 2099
   (`DRAFT_STARTS_AT`), so it can never apply, and the merchant's own dates
@@ -125,9 +131,10 @@ own tab in the app:
   Publish instead of Save. A draft row has a Publish action, which restores
   the dates. A draft turned on from Shopify's own admin counts as active.
 - Bulk edit on every list (Home and each kind): a checkbox per row, select
-  all in the header, and a bar on top of the list with Activate (publishes
-  drafts), Deactivate, Move to draft and Delete. Activate, Move to draft and
-  Delete ask first. `runDiscountRowAction` handles `bulk-*` intents: up to 250
+  all in the header, and a bar on top of the list with Publish, Move to
+  draft and Delete, each asking first. Move to draft is off when any
+  selected discount is a draft, and Publish when any is active; a line in
+  the bar says why. `runDiscountRowAction` handles `bulk-*` intents: up to 250
   IDs, four at a time, each looked up first (so only this app's discounts
   change) and skipped when already in the requested state. Failures are
   listed by title in a banner; the rest still go through. Shopify's own bulk

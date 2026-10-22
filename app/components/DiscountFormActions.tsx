@@ -5,6 +5,8 @@ type Props = {
   savingAs: "save" | "draft" | null;
   /** The discount being edited is a draft, so the main action publishes it. */
   isDraft?: boolean;
+  /** The draft is a discount whose end date has passed, not a saved draft. */
+  ended?: boolean;
   cancelHref: string;
   onSave: (saveAs: "save" | "draft") => void;
 };
@@ -18,6 +20,7 @@ export function DiscountFormActions({
   saving,
   savingAs,
   isDraft = false,
+  ended = false,
   cancelHref,
   onSave,
 }: Props) {
@@ -49,9 +52,9 @@ export function DiscountFormActions({
       {isDraft && (
         <s-banner slot="supplemental-start" tone="info" heading="Draft">
           <s-paragraph>
-            This discount is a draft, so it does not apply at checkout. Publish
-            it to run it on the dates below, or save it as a draft again to keep
-            working on it.
+            {ended
+              ? "This discount's end date has passed, so it is a draft and does not apply at checkout. Change or clear the end date below, then publish it."
+              : "This discount is a draft, so it does not apply at checkout. Publish it to run it on the dates below, or save it as a draft again to keep working on it."}
           </s-paragraph>
         </s-banner>
       )}

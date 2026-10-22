@@ -100,6 +100,7 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
   return {
     values,
     isDraft: discount.status === "DRAFT",
+    ended: discount.status === "DRAFT" && !discount.parked,
     currencyCode,
     usageCount: discount.usageCount,
     unsupportedReason: config.status === "ok" ? null : config.reason,
@@ -131,6 +132,7 @@ export default function EditOrderDiscountPage() {
   const {
     values: loadedValues,
     isDraft,
+    ended,
     currencyCode,
     usageCount,
     unsupportedReason,
@@ -168,6 +170,7 @@ export default function EditOrderDiscountPage() {
         saving={saving}
         savingAs={savingAsFrom(fetcher.formData)}
         isDraft={isDraft}
+        ended={ended}
         cancelHref="/app/discounts/order"
         onSave={save}
       />

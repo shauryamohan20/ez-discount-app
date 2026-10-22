@@ -100,6 +100,7 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
     currencyCode,
     usageCount: discount.usageCount,
     isDraft: discount.status === "DRAFT",
+    ended: discount.status === "DRAFT" && !discount.parked,
   };
 };
 
@@ -126,6 +127,7 @@ export default function EditBuyXGetYPage() {
   const {
     values: loadedValues,
     isDraft,
+    ended,
     currencyCode,
     usageCount,
   } = useLoaderData<typeof loader>();
@@ -163,6 +165,7 @@ export default function EditBuyXGetYPage() {
         saving={saving}
         savingAs={savingAsFrom(fetcher.formData)}
         isDraft={isDraft}
+        ended={ended}
         cancelHref="/app/discounts/bxgy"
         onSave={save}
       />

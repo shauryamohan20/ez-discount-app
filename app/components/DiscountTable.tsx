@@ -24,11 +24,11 @@ function bulkConfirmation(intent: BulkIntent, count: number) {
   const discounts = `${count} ${count === 1 ? "discount" : "discounts"}`;
 
   switch (intent) {
-    case "bulk-activate":
+    case "bulk-publish":
       return {
-        heading: `Activate ${discounts}?`,
-        body: "Drafts are published on their own dates. Scheduled discounts start today, and ended ones run with no end date. Discounts that are already active stay as they are.",
-        confirmLabel: "Activate",
+        heading: `Publish ${discounts}?`,
+        body: "Drafts are published on their own dates, and any whose end date has passed run again with no end date. A start date that has passed means they apply at checkout straight away.",
+        confirmLabel: "Publish",
         critical: false,
       };
     case "bulk-draft":
@@ -50,25 +50,18 @@ function bulkConfirmation(intent: BulkIntent, count: number) {
 
 const STATUS_LABELS: Record<DiscountStatus, string> = {
   ACTIVE: "Active",
-  SCHEDULED: "Scheduled",
-  EXPIRED: "Expired",
   DRAFT: "Draft",
 };
 
-const STATUS_TONES: Record<
-  DiscountStatus,
-  "success" | "info" | "neutral" | "caution"
-> = {
+const STATUS_TONES: Record<DiscountStatus, "success" | "caution"> = {
   ACTIVE: "success",
-  SCHEDULED: "info",
-  EXPIRED: "neutral",
   DRAFT: "caution",
 };
 
 type RowActionResult = { ok: boolean; message: string } | undefined;
 
 type PendingAction = {
-  intent: "activate" | "delete" | "publish";
+  intent: "delete" | "publish";
   id: string;
   method: string;
   heading: string;
@@ -140,6 +133,26 @@ export function DiscountTable({
     ? String(bulkFetcher.formData?.get("intent") ?? "")
     : null;
 
+  // A bulk action is off when it would not change some selected discount:
+  // Move to draft with a draft selected, Publish with an active one selected.
+  const selectedDiscounts = discounts.filter((discount) =>
+    selected.has(discount.id),
+  );
+  const anyDraft = selectedDiscounts.some(
+    (discount) => discount.status === "DRAFT",
+  );
+  const anyActive = selectedDiscounts.some(
+    (discount) => discount.status === "ACTIVE",
+  );
+  const selectionNote =
+    anyDraft && anyActive
+      ? "Publish and Move to draft are off because the selection has both active discounts and drafts."
+      : anyDraft
+        ? "Move to draft is off because the selection has drafts."
+        : anyActive
+          ? "Publish is off because the selection has active discounts."
+          : null;
+
   const allSelected =
     discounts.length > 0 &&
     discounts.every((discount) => selected.has(discount.id));
@@ -190,24 +203,6 @@ export function DiscountTable({
     setPending(null);
   };
 
-  const askActivate = (discount: TieredDiscount, numericId: string) => {
-    setPending({
-      intent: "activate",
-      id: numericId,
-      method: discount.method,
-      heading: "Activate this discount?",
-      body:
-        discount.status === "SCHEDULED"
-          ? `${discount.title} is scheduled to start on ${formatShopDate(
-              discount.startsAt,
-              offsetMinutes,
-            )}. Activating it now moves its start date to today.`
-          : `${discount.title} has ended. Activating it clears its end date, so it runs until you stop it.`,
-      confirmLabel: "Activate",
-      critical: false,
-    });
-  };
-
   const askPublish = (discount: TieredDiscount, numericId: string) => {
     const starts = formatShopDate(discount.startsAt, offsetMinutes);
     const ends = discount.endsAt
@@ -219,7 +214,9 @@ export function DiscountTable({
       id: numericId,
       method: discount.method,
       heading: "Publish this draft?",
-      body: `${discount.title} starts on ${starts}${ends}. If the start date has passed, it starts applying at checkout straight away.`,
+      body: discount.parked
+        ? `${discount.title} starts on ${starts}${ends}. If the start date has passed, it starts applying at checkout straight away.`
+        : `${discount.title} ended on ${formatShopDate(discount.endsAt ?? "", offsetMinutes)}. Publishing clears its end date, so it applies at checkout until you move it back to draft.`,
       confirmLabel: "Publish",
       critical: false,
     });
@@ -276,37 +273,31 @@ export function DiscountTable({
                     ? `${selected.size} selected`
                     : "Bulk edit"}
                 </s-text>
-                {selected.size === 0 && (
-                  <s-text color="subdued">
-                    Tick discounts to activate, deactivate, move to draft or
-                    delete them together.
-                  </s-text>
-                )}
+                <s-text color="subdued">
+                  {selected.size === 0
+                    ? "Tick discounts to publish, move to draft or delete them together."
+                    : (selectionNote ?? "")}
+                </s-text>
               </s-stack>
 
               <s-stack direction="inline" gap="small-200">
                 <s-button
                   commandFor={BULK_MODAL_ID}
                   command="--show"
-                  {...(selected.size === 0 || busy ? { disabled: true } : {})}
-                  {...(busyIntent === "bulk-activate" ? { loading: true } : {})}
-                  onClick={() => setBulkIntent("bulk-activate")}
-                >
-                  Activate
-                </s-button>
-                <s-button
-                  {...(selected.size === 0 || busy ? { disabled: true } : {})}
-                  {...(busyIntent === "bulk-deactivate"
-                    ? { loading: true }
+                  {...(selected.size === 0 || anyActive || busy
+                    ? { disabled: true }
                     : {})}
-                  onClick={() => runBulk("bulk-deactivate")}
+                  {...(busyIntent === "bulk-publish" ? { loading: true } : {})}
+                  onClick={() => setBulkIntent("bulk-publish")}
                 >
-                  Deactivate
+                  Publish
                 </s-button>
                 <s-button
                   commandFor={BULK_MODAL_ID}
                   command="--show"
-                  {...(selected.size === 0 || busy ? { disabled: true } : {})}
+                  {...(selected.size === 0 || anyDraft || busy
+                    ? { disabled: true }
+                    : {})}
                   {...(busyIntent === "bulk-draft" ? { loading: true } : {})}
                   onClick={() => setBulkIntent("bulk-draft")}
                 >
@@ -460,12 +451,12 @@ export function DiscountTable({
                           {...(busy ? { disabled: true } : {})}
                           {...(rowBusy ? { loading: true } : {})}
                           onClick={() =>
-                            run("deactivate", numericId, discount.method)
+                            run("draft", numericId, discount.method)
                           }
                         >
-                          Deactivate
+                          Move to draft
                         </s-button>
-                      ) : discount.status === "DRAFT" ? (
+                      ) : (
                         <s-button
                           variant="tertiary"
                           commandFor={CONFIRM_MODAL_ID}
@@ -475,17 +466,6 @@ export function DiscountTable({
                           onClick={() => askPublish(discount, numericId)}
                         >
                           Publish
-                        </s-button>
-                      ) : (
-                        <s-button
-                          variant="tertiary"
-                          commandFor={CONFIRM_MODAL_ID}
-                          command="--show"
-                          {...(busy ? { disabled: true } : {})}
-                          {...(rowBusy ? { loading: true } : {})}
-                          onClick={() => askActivate(discount, numericId)}
-                        >
-                          Activate
                         </s-button>
                       )}
 
