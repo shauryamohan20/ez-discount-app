@@ -8,7 +8,9 @@
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 export function isCalendarDate(value: string): boolean {
-  return DATE_PATTERN.test(value) && !Number.isNaN(Date.parse(`${value}T00:00:00Z`));
+  return (
+    DATE_PATTERN.test(value) && !Number.isNaN(Date.parse(`${value}T00:00:00Z`))
+  );
 }
 
 /** -300 becomes "-05:00", 330 becomes "+05:30". */

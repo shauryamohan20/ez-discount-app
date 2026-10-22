@@ -955,47 +955,84 @@ export async function deleteTieredDiscount(
   return { ok: true, id: payload.deletedAutomaticDiscountId };
 }
 
-const RESOURCE_TITLES_QUERY = `#graphql
-  query DiscountResourceTitles($ids: [ID!]!) {
+const RESOURCE_DETAILS_QUERY = `#graphql
+  query DiscountResourceDetails($ids: [ID!]!) {
     nodes(ids: $ids) {
       __typename
       ... on Product {
         id
         title
+        featuredMedia {
+          preview {
+            image {
+              url(transform: { maxWidth: 160, maxHeight: 160 })
+            }
+          }
+        }
       }
       ... on Collection {
         id
         title
+        image {
+          url(transform: { maxWidth: 160, maxHeight: 160 })
+        }
       }
     }
   }
 `;
 
+export type ResourceDetails = { title: string; image: string | null };
+
+type ResourceDetailsNode = {
+  id?: string;
+  title?: string;
+  featuredMedia?: {
+    preview?: { image?: { url?: string } | null } | null;
+  } | null;
+  image?: { url?: string } | null;
+} | null;
+
 /**
- * Titles for the products and collections a discount targets. The config only
- * stores IDs, so titles are resolved on load and a renamed product shows its
- * current name. A deleted one comes back as null and is reported as missing.
+ * Titles and thumbnail pictures for the products and collections a discount
+ * targets. The config only stores IDs, so both are resolved on load and a
+ * renamed product shows its current name. A deleted one is left out.
  */
-export async function getResourceTitles(
+export async function getResourceDetails(
   admin: AdminApiContext,
   ids: string[],
-): Promise<Map<string, string>> {
-  const titles = new Map<string, string>();
+): Promise<Map<string, ResourceDetails>> {
+  const details = new Map<string, ResourceDetails>();
   const unique = [...new Set(ids)];
 
   // nodes() takes at most 250 IDs per request, and a list page can need more
   // than that across every discount on it.
   for (let start = 0; start < unique.length; start += 250) {
-    const data = await adminRequest<{
-      nodes: ({ id: string; title: string } | null)[];
-    }>(admin, RESOURCE_TITLES_QUERY, { ids: unique.slice(start, start + 250) });
+    const data = await adminRequest<{ nodes: ResourceDetailsNode[] }>(
+      admin,
+      RESOURCE_DETAILS_QUERY,
+      { ids: unique.slice(start, start + 250) },
+    );
 
     for (const node of data.nodes) {
-      if (node?.id) titles.set(node.id, node.title);
+      if (!node?.id) continue;
+      details.set(node.id, {
+        title: node.title ?? "",
+        image:
+          node.featuredMedia?.preview?.image?.url ?? node.image?.url ?? null,
+      });
     }
   }
 
-  return titles;
+  return details;
+}
+
+/** Titles only, for lists that show names but no pictures. */
+export async function getResourceTitles(
+  admin: AdminApiContext,
+  ids: string[],
+): Promise<Map<string, string>> {
+  const details = await getResourceDetails(admin, ids);
+  return new Map([...details].map(([id, detail]) => [id, detail.title]));
 }
 
 /** Every product and collection ID the Buy X Get Y discounts name. */

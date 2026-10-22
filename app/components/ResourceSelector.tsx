@@ -1,6 +1,7 @@
 import { useAppBridge } from "@shopify/app-bridge-react";
 
 import type { BxgyResource } from "../lib/bxgy-form";
+import { pickerImage } from "../lib/resource-image";
 
 type Props = {
   type: "product" | "collection";
@@ -54,6 +55,7 @@ export function ResourceSelector({
       picked.map((resource) => ({
         id: String(resource.id),
         title: String(resource.title ?? ""),
+        image: pickerImage(resource),
       })),
     );
   };

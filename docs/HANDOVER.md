@@ -281,7 +281,10 @@ order thresholds.
   to, customers, tiers or thresholds). Renders `BuyXGetYFields` for that kind.
 - `BuyXGetYFields.tsx`, `ResourceSelector.tsx` (Shopify resource picker).
 - `DemoCart.tsx` and `ProductArt.tsx`: the demo cart tile. A card per line
-  with a drawn placeholder picture (inline SVG, no image hosting), purple
+  with the real picture of a picked product or collection (kept from the
+  resource picker via `pickerImage`, or looked up on edit pages with
+  `getResourceDetails`), else a drawn placeholder (inline SVG), which is also
+  the fallback when an image fails to load, purple
   when discounted, a dashed outline when not in the cart, and a status line
   from `cartLineNotes` in `preview-explain.ts`: what was taken off, or why
   nothing was. A whole order discount is shared across lines by value.
@@ -290,13 +293,8 @@ order thresholds.
 - `DiscountPreviewPanel.tsx`: the live preview beside the form.
   `TieredDiscountForm` lays the form and the panel out in an `s-grid` (equal
   halves, one column under 1100px of container width); the panel is sticky
-  while the form scrolls, and always fits on screen without scrolling inside
-  it: when its content is taller than the space, CSS `zoom` shrinks it and
-  lets it re-flow to the panel's width. Polaris finishes redrawing a moment
-  after a size change and zoom can switch the panel between one and two
-  columns, so `fitPanel` searches for the largest zoom that fits, measuring
-  once drawing settles at each step. It runs on load, resize and content
-  change, never on scroll or in response to its own zoom.
+  while the form scrolls, at its normal size (the owner chose this over
+  shrinking it to fit; when it is taller than the screen, the page scrolls).
   Inside the panel, details and "What happens" sit on the
   left and the cart on the right above 640px of panel width. `s-page`'s `aside` slot is not used, because
   it only exists at the default page width. A demo cart with quantity

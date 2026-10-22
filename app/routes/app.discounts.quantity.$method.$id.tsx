@@ -32,7 +32,7 @@ import {
 } from "../lib/discount-form";
 import { shopIsoToCalendarDate, todayInShop } from "../lib/shop-time";
 import {
-  getResourceTitles,
+  getResourceDetails,
   getShopCurrencyCode,
   discountEditPath,
   getShopTimezoneOffsetMinutes,
@@ -77,10 +77,11 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
         ? appliesTo.collectionIds
         : [];
 
-  const titles = await getResourceTitles(admin, resourceIds);
+  const details = await getResourceDetails(admin, resourceIds);
   const resources = resourceIds.map((id) => ({
     id,
-    title: titles.get(id) ?? "No longer available",
+    title: details.get(id)?.title ?? "No longer available",
+    image: details.get(id)?.image ?? null,
   }));
 
   const quantityTiers =

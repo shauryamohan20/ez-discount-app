@@ -32,10 +32,11 @@ import { shopIsoToCalendarDate, todayInShop } from "../lib/shop-time";
 import { discountTab, toDiscountGid } from "../lib/discount-id";
 import {
   discountEditPath,
-  getResourceTitles,
+  getResourceDetails,
   getShopCurrencyCode,
   getShopTimezoneOffsetMinutes,
   getTieredDiscount,
+  type ResourceDetails,
 } from "../models/discounts.server";
 import { saveDiscountFromForm } from "../models/discount-save.server";
 
@@ -68,8 +69,8 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
   // Titles are looked up now rather than stored, so a renamed product shows
   // its current name. One that was deleted reads "No longer available".
   const ids = [...config.bxgy.buyScope.ids, ...config.bxgy.getScope.ids];
-  const titles = await getResourceTitles(admin, ids).catch(
-    () => new Map<string, string>(),
+  const details = await getResourceDetails(admin, ids).catch(
+    () => new Map<string, ResourceDetails>(),
   );
 
   const values: DiscountFormValues = {
@@ -90,7 +91,8 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
     bxgy: config.bxgy
       ? bxgyToFormValues(
           config.bxgy,
-          (resourceId) => titles.get(resourceId) ?? "",
+          (resourceId) => details.get(resourceId)?.title ?? "",
+          (resourceId) => details.get(resourceId)?.image ?? null,
         )
       : blankBxgyForm(),
   };

@@ -10,8 +10,8 @@ import {
   type GetScopeKind,
 } from "./tiers";
 
-/** A picked product or collection; the title is for display only. */
-export type BxgyResource = { id: string; title: string };
+/** A picked product or collection; the title and picture are display only. */
+export type BxgyResource = { id: string; title: string; image?: string | null };
 
 /**
  * The Buy X Get Y part of the form. Numbers are kept as strings so a half
@@ -71,8 +71,10 @@ export function blankBxgyForm(): BxgyFormValues {
 export function bxgyToFormValues(
   bxgy: BuyXGetY,
   titleOf: (id: string) => string,
+  imageOf: (id: string) => string | null = () => null,
 ): BxgyFormValues {
-  const refs = (ids: string[]) => ids.map((id) => ({ id, title: titleOf(id) }));
+  const refs = (ids: string[]) =>
+    ids.map((id) => ({ id, title: titleOf(id), image: imageOf(id) }));
 
   return {
     buyQuantity: String(bxgy.buyQuantity),

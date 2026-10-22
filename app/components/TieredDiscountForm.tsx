@@ -1,6 +1,7 @@
 import { useAppBridge } from "@shopify/app-bridge-react";
 
 import { isDiscountMethod } from "../lib/discount-id";
+import { pickerImage } from "../lib/resource-image";
 import { BuyXGetYFields } from "./BuyXGetYFields";
 import { DiscountPreviewPanel } from "./DiscountPreviewPanel";
 import {
@@ -70,6 +71,7 @@ export function TieredDiscountForm({
     const refs: ResourceRef[] = picked.map((resource) => ({
       id: String(resource.id),
       title: String(resource.title ?? ""),
+      image: pickerImage(resource),
     }));
 
     update(isCollections ? { collections: refs } : { products: refs });

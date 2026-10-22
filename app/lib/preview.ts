@@ -29,20 +29,16 @@ export type DemoLine = {
   inSelectedCollection: boolean;
   inBuyCollection: boolean;
   inGetCollection: boolean;
-  /** The placeholder picture shown for this line. Display only. */
+  /** The real picture of a picked product or collection, if it has one. */
+  image: string | null;
+  /** The placeholder picture shown when there is no real one. Display only. */
   art: DemoArt;
   /** Which colour the picture uses. Display only. */
   tint: number;
 };
 
 export type DemoArt =
-  | "tshirt"
-  | "hoodie"
-  | "cap"
-  | "socks"
-  | "bag"
-  | "box"
-  | "tag";
+  "tshirt" | "hoodie" | "cap" | "socks" | "bag" | "box" | "tag";
 
 /** Who is shopping, which decides the customer eligibility rules. */
 export type DemoShopper = "guest" | "newCustomer" | "returning";

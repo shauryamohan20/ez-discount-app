@@ -41,6 +41,8 @@ const MAX_DEMO_QUANTITY = 20;
 
 type LineOptions = {
   productId?: string;
+  /** The real picture of a picked product or collection. */
+  image?: string | null;
   inSelectedCollection?: boolean;
   inBuyCollection?: boolean;
   inGetCollection?: boolean;
@@ -81,6 +83,7 @@ function demoLine(
     inSelectedCollection: options.inSelectedCollection ?? false,
     inBuyCollection: options.inBuyCollection ?? false,
     inGetCollection: options.inGetCollection ?? false,
+    image: options.image ?? null,
     art: artFor(key, title),
     tint: tintFor(key),
   };
@@ -123,7 +126,7 @@ export function quantityTierCart(values: DiscountFormValues): DemoLine[] {
           product.title || "Chosen product",
           PRICES[index],
           index === 0 ? 2 : 0,
-          { productId: product.id },
+          { productId: product.id, image: product.image },
         ),
       ),
       otherLine("does not count", 1),
@@ -140,7 +143,7 @@ export function quantityTierCart(values: DiscountFormValues): DemoLine[] {
           `Item from ${collection.title || "a chosen collection"}`,
           PRICES[index],
           index === 0 ? 2 : 0,
-          { inSelectedCollection: true },
+          { inSelectedCollection: true, image: collection.image },
         ),
       ),
       otherLine("not in the collections", 1),
@@ -209,7 +212,7 @@ export function buyXGetYCart(
             product.title || "Chosen product",
             index === 0 ? 30 : 24,
             0,
-            { productId: product.id },
+            { productId: product.id, image: product.image },
           ),
         ),
       );
@@ -225,6 +228,7 @@ export function buyXGetYCart(
             0,
             {
               inBuyCollection: true,
+              image: collection.image,
               inGetCollection:
                 bxgy.getScopeKind === "collections" &&
                 getCollectionIds.has(collection.id),
@@ -248,7 +252,7 @@ export function buyXGetYCart(
             product.title || "Chosen product",
             index === 0 ? 20 : 15,
             0,
-            { productId: product.id },
+            { productId: product.id, image: product.image },
           ),
         ),
       );
@@ -267,7 +271,7 @@ export function buyXGetYCart(
             `Item from ${collection.title || "a chosen collection"}`,
             index === 0 ? 20 : 15,
             0,
-            { inGetCollection: true },
+            { inGetCollection: true, image: collection.image },
           ),
         ),
       );

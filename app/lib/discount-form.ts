@@ -32,6 +32,8 @@ import {
 export type ResourceRef = {
   id: string;
   title: string;
+  /** A picture for the demo cart. Display only, never saved. */
+  image?: string | null;
 };
 
 /** Form state is kept as strings so half typed numbers stay on screen. */

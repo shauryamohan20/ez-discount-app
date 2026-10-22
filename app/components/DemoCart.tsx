@@ -164,7 +164,12 @@ export function DemoCart({ lines, result, notes, money, onQuantity }: Props) {
               ...(applied ? styles.lineApplied : {}),
             }}
           >
-            <ProductArt art={line.art} tint={line.tint} faded={empty} />
+            <ProductArt
+              art={line.art}
+              image={line.image}
+              tint={line.tint}
+              faded={empty}
+            />
 
             <div style={styles.details}>
               <span style={styles.title}>{line.title}</span>

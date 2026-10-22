@@ -1,4 +1,7 @@
+import { useState } from "react";
+
 import { ACCENT, ACCENT_SURFACE } from "../lib/brand";
+import { thumbnailUrl } from "../lib/resource-image";
 import type { DemoArt } from "../lib/preview";
 
 /**
@@ -138,6 +141,8 @@ function Drawing({ art, ink }: { art: DemoArt; ink: string }) {
 
 type Props = {
   art: DemoArt;
+  /** A real product or collection picture, shown instead of the drawing. */
+  image?: string | null;
   tint: number;
   size?: number;
   /** Faded, for an item that is not in the cart. */
@@ -145,11 +150,41 @@ type Props = {
 };
 
 /**
- * A placeholder product picture for the demo cart. Drawn inline, so the app
- * needs no image hosting and the picture is there the moment the cart is.
+ * A product picture for the demo cart: the real one for a picked product or
+ * collection, or a drawn placeholder when there is none or it fails to load.
+ * The drawings are inline, so they need no image hosting.
  */
-export function ProductArt({ art, tint, size = 56, faded = false }: Props) {
+export function ProductArt({
+  art,
+  image,
+  tint,
+  size = 56,
+  faded = false,
+}: Props) {
   const palette = PALETTES[tint % PALETTES.length];
+  const [failed, setFailed] = useState<string | null>(null);
+
+  if (image && failed !== image) {
+    return (
+      <img
+        src={thumbnailUrl(image, size * 2)}
+        alt=""
+        width={size}
+        height={size}
+        loading="lazy"
+        onError={() => setFailed(image)}
+        style={{
+          flexShrink: 0,
+          width: size,
+          height: size,
+          objectFit: "cover",
+          borderRadius: 10,
+          background: palette.background,
+          opacity: faded ? 0.5 : 1,
+        }}
+      />
+    );
+  }
 
   return (
     <svg
