@@ -1012,8 +1012,12 @@ export async function getBuyXGetYTitles(
 export async function runDiscountRowAction(
   admin: AdminApiContext,
   formData: FormData,
-): Promise<{ ok: boolean; message: string }> {
+): Promise<DiscountActionResult> {
   const intent = String(formData.get("intent") ?? "");
+
+  if (isBulkIntent(intent)) {
+    return runDiscountBulkAction(admin, intent, formData.get("ids"));
+  }
   const id = toDiscountGid(
     String(formData.get("method") ?? ""),
     String(formData.get("id") ?? ""),
@@ -1078,6 +1082,158 @@ export async function runDiscountRowAction(
           : "Something went wrong updating the discount.",
     };
   }
+}
+
+/** What a row or bulk action reports back to the list. */
+export type DiscountActionResult = {
+  ok: boolean;
+  message: string;
+  /** Bulk actions only: the discounts that could not be changed, and why. */
+  failures?: { title: string; message: string }[];
+};
+
+export type BulkIntent =
+  "bulk-activate" | "bulk-deactivate" | "bulk-draft" | "bulk-delete";
+
+function isBulkIntent(intent: string): intent is BulkIntent {
+  return (
+    intent === "bulk-activate" ||
+    intent === "bulk-deactivate" ||
+    intent === "bulk-draft" ||
+    intent === "bulk-delete"
+  );
+}
+
+/** More than a list page shows, and enough to stay well inside rate limits. */
+const MAX_BULK_IDS = 250;
+
+/** How many discounts are changed at once. */
+const BULK_CONCURRENCY = 4;
+
+const DISCOUNT_GID = /^gid:\/\/shopify\/Discount(Automatic|Code)Node\/\d+$/;
+
+const BULK_WORDS: Record<BulkIntent, { done: string; already: string }> = {
+  "bulk-activate": { done: "activated", already: "already active" },
+  "bulk-deactivate": { done: "deactivated", already: "already not active" },
+  "bulk-draft": { done: "moved to drafts", already: "already drafts" },
+  "bulk-delete": { done: "deleted", already: "already gone" },
+};
+
+/**
+ * One discount through a bulk action. Each action does what makes sense for
+ * the discount's state: activating a draft publishes it, and a discount
+ * already in the requested state is skipped rather than changed again.
+ */
+async function applyBulkAction(
+  admin: AdminApiContext,
+  intent: BulkIntent,
+  discount: TieredDiscount,
+): Promise<MutationResult | "skipped"> {
+  switch (intent) {
+    case "bulk-activate":
+      if (discount.status === "ACTIVE") return "skipped";
+      return discount.status === "DRAFT"
+        ? publishTieredDiscount(admin, discount)
+        : setTieredDiscountActive(admin, discount.id, true);
+    case "bulk-deactivate":
+      if (discount.status !== "ACTIVE") return "skipped";
+      return setTieredDiscountActive(admin, discount.id, false);
+    case "bulk-draft":
+      if (discount.status === "DRAFT") return "skipped";
+      return moveTieredDiscountToDraft(admin, discount);
+    case "bulk-delete":
+      return deleteTieredDiscount(admin, discount.id);
+  }
+}
+
+function countOf(count: number): string {
+  return `${count} ${count === 1 ? "discount" : "discounts"}`;
+}
+
+/**
+ * Applies one action to many discounts, a few at a time. Shopify's own bulk
+ * mutations cover code discounts only and run as background jobs, so each
+ * discount is changed directly instead, which also says which ones failed.
+ * One failure never stops the rest.
+ */
+async function runDiscountBulkAction(
+  admin: AdminApiContext,
+  intent: BulkIntent,
+  rawIds: FormDataEntryValue | null,
+): Promise<DiscountActionResult> {
+  let ids: string[] = [];
+  try {
+    const parsed: unknown = JSON.parse(String(rawIds ?? "[]"));
+    if (Array.isArray(parsed)) {
+      ids = [...new Set(parsed.map(String))].filter((id) =>
+        DISCOUNT_GID.test(id),
+      );
+    }
+  } catch {
+    ids = [];
+  }
+
+  if (!ids.length) {
+    return { ok: false, message: "Select at least one discount." };
+  }
+  if (ids.length > MAX_BULK_IDS) {
+    return {
+      ok: false,
+      message: `Select no more than ${MAX_BULK_IDS} discounts at a time.`,
+    };
+  }
+
+  let done = 0;
+  let skipped = 0;
+  const failures: { title: string; message: string }[] = [];
+  const queue = [...ids];
+
+  const worker = async () => {
+    for (let id = queue.shift(); id; id = queue.shift()) {
+      try {
+        const discount = await getTieredDiscount(admin, id);
+        if (!discount) {
+          if (intent === "bulk-delete") skipped += 1;
+          else failures.push({ title: id, message: "It no longer exists." });
+          continue;
+        }
+
+        const result = await applyBulkAction(admin, intent, discount);
+        if (result === "skipped") {
+          skipped += 1;
+        } else if (result.ok) {
+          done += 1;
+        } else {
+          failures.push({
+            title: discount.title,
+            message: result.userErrors.map((error) => error.message).join(" "),
+          });
+        }
+      } catch (error) {
+        failures.push({
+          title: id,
+          message:
+            error instanceof Error ? error.message : "Something went wrong.",
+        });
+      }
+    }
+  };
+
+  await Promise.all(
+    Array.from({ length: Math.min(BULK_CONCURRENCY, ids.length) }, worker),
+  );
+
+  const words = BULK_WORDS[intent];
+  const parts: string[] = [];
+  if (done) parts.push(`${countOf(done)} ${words.done}`);
+  if (skipped) parts.push(`${skipped} ${words.already}`);
+  if (failures.length) parts.push(`${failures.length} could not be changed`);
+
+  return {
+    ok: failures.length === 0,
+    message: parts.join(", ") || "Nothing to change",
+    failures,
+  };
 }
 
 /** A discount's edit page, which depends on its kind as well as its method. */

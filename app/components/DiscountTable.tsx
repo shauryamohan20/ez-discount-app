@@ -3,6 +3,8 @@ import { useFetcher } from "react-router";
 import { useAppBridge } from "@shopify/app-bridge-react";
 
 import type {
+  BulkIntent,
+  DiscountActionResult,
   DiscountStatus,
   TieredDiscount,
 } from "../models/discounts.server";
@@ -15,6 +17,36 @@ import { formatShopDate } from "../lib/shop-time";
 import { DiscountSummary } from "./DiscountSummary";
 
 const CONFIRM_MODAL_ID = "confirm-discount-action";
+const BULK_MODAL_ID = "confirm-bulk-action";
+
+/** The bulk actions that ask first, and what they say. */
+function bulkConfirmation(intent: BulkIntent, count: number) {
+  const discounts = `${count} ${count === 1 ? "discount" : "discounts"}`;
+
+  switch (intent) {
+    case "bulk-activate":
+      return {
+        heading: `Activate ${discounts}?`,
+        body: "Drafts are published on their own dates. Scheduled discounts start today, and ended ones run with no end date. Discounts that are already active stay as they are.",
+        confirmLabel: "Activate",
+        critical: false,
+      };
+    case "bulk-draft":
+      return {
+        heading: `Move ${discounts} to drafts?`,
+        body: "They stop applying at checkout straight away and keep their dates, so you can publish them again later.",
+        confirmLabel: "Move to draft",
+        critical: false,
+      };
+    default:
+      return {
+        heading: `Delete ${discounts}?`,
+        body: "They are removed from your store and stop applying at checkout, and their codes stop working. This cannot be undone.",
+        confirmLabel: "Delete",
+        critical: true,
+      };
+  }
+}
 
 const STATUS_LABELS: Record<DiscountStatus, string> = {
   ACTIVE: "Active",
@@ -60,8 +92,8 @@ type Props = {
  * kind, and each row links to its own kind's edit page, so one table can mix
  * kinds.
  *
- * Row actions are posted to the page that renders the table, so that page's
- * route must export an action that calls runDiscountRowAction.
+ * Row and bulk actions are posted to the page that renders the table, so
+ * that page's route must export an action that calls runDiscountRowAction.
  */
 export function DiscountTable({
   discounts,
@@ -71,14 +103,78 @@ export function DiscountTable({
 }: Props) {
   const shopify = useAppBridge();
   const fetcher = useFetcher<RowActionResult>();
+  const bulkFetcher = useFetcher<DiscountActionResult>();
 
   const [pending, setPending] = useState<PendingAction | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(() => new Set());
+  const [bulkIntent, setBulkIntent] = useState<BulkIntent | null>(null);
 
   useEffect(() => {
     if (fetcher.data?.ok) shopify.toast.show(fetcher.data.message);
   }, [fetcher.data, shopify]);
 
-  const busy = fetcher.state !== "idle";
+  // A finished bulk action clears the selection. Partial failures are listed
+  // in a banner instead of a toast, so they are not missed.
+  useEffect(() => {
+    const result = bulkFetcher.data;
+    if (!result) return;
+
+    if (result.ok) shopify.toast.show(result.message);
+    setSelected(new Set());
+  }, [bulkFetcher.data, shopify]);
+
+  // Discounts that left the list, deleted for example, leave the selection.
+  useEffect(() => {
+    const ids = new Set(discounts.map((discount) => discount.id));
+    setSelected((current) => {
+      const kept = [...current].filter((id) => ids.has(id));
+      return kept.length === current.size ? current : new Set(kept);
+    });
+  }, [discounts]);
+
+  const bulkBusy = bulkFetcher.state !== "idle";
+  const busy = fetcher.state !== "idle" || bulkBusy;
+  const bulkError =
+    bulkFetcher.data && !bulkFetcher.data.ok ? bulkFetcher.data : null;
+  const busyIntent = bulkBusy
+    ? String(bulkFetcher.formData?.get("intent") ?? "")
+    : null;
+
+  const allSelected =
+    discounts.length > 0 &&
+    discounts.every((discount) => selected.has(discount.id));
+  const someSelected = !allSelected && selected.size > 0;
+
+  const toggleAll = (checked: boolean) => {
+    setSelected(
+      checked ? new Set(discounts.map((discount) => discount.id)) : new Set(),
+    );
+  };
+
+  const toggleOne = (id: string, checked: boolean) => {
+    setSelected((current) => {
+      const next = new Set(current);
+      if (checked) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  };
+
+  const runBulk = (intent: BulkIntent) => {
+    bulkFetcher.submit(
+      { intent, ids: JSON.stringify([...selected]) },
+      { method: "POST" },
+    );
+  };
+
+  const confirmBulk = () => {
+    if (bulkIntent) runBulk(bulkIntent);
+    setBulkIntent(null);
+  };
+
+  const bulkCopy = bulkIntent
+    ? bulkConfirmation(bulkIntent, selected.size)
+    : null;
   const busyId = busy ? String(fetcher.formData?.get("id") ?? "") : null;
   const actionError =
     fetcher.data && !fetcher.data.ok ? fetcher.data.message : null;
@@ -152,10 +248,108 @@ export function DiscountTable({
         </s-banner>
       )}
 
+      {bulkError && (
+        <s-banner tone="critical" heading={bulkError.message}>
+          <s-unordered-list>
+            {(bulkError.failures ?? []).map((failure) => (
+              <s-list-item key={failure.title}>
+                {failure.title}: {failure.message}
+              </s-list-item>
+            ))}
+          </s-unordered-list>
+        </s-banner>
+      )}
+
       <s-section padding="none" {...(heading ? { heading } : {})}>
         <s-table variant="auto">
+          {/* Bulk edit, always on top of the list. */}
+          <s-box slot="filters" padding="base">
+            <s-stack
+              direction="inline"
+              gap="base"
+              alignItems="center"
+              justifyContent="space-between"
+            >
+              <s-stack direction="inline" gap="small-200" alignItems="center">
+                <s-text type="strong">
+                  {selected.size > 0
+                    ? `${selected.size} selected`
+                    : "Bulk edit"}
+                </s-text>
+                {selected.size === 0 && (
+                  <s-text color="subdued">
+                    Tick discounts to activate, deactivate, move to draft or
+                    delete them together.
+                  </s-text>
+                )}
+              </s-stack>
+
+              <s-stack direction="inline" gap="small-200">
+                <s-button
+                  commandFor={BULK_MODAL_ID}
+                  command="--show"
+                  {...(selected.size === 0 || busy ? { disabled: true } : {})}
+                  {...(busyIntent === "bulk-activate" ? { loading: true } : {})}
+                  onClick={() => setBulkIntent("bulk-activate")}
+                >
+                  Activate
+                </s-button>
+                <s-button
+                  {...(selected.size === 0 || busy ? { disabled: true } : {})}
+                  {...(busyIntent === "bulk-deactivate"
+                    ? { loading: true }
+                    : {})}
+                  onClick={() => runBulk("bulk-deactivate")}
+                >
+                  Deactivate
+                </s-button>
+                <s-button
+                  commandFor={BULK_MODAL_ID}
+                  command="--show"
+                  {...(selected.size === 0 || busy ? { disabled: true } : {})}
+                  {...(busyIntent === "bulk-draft" ? { loading: true } : {})}
+                  onClick={() => setBulkIntent("bulk-draft")}
+                >
+                  Move to draft
+                </s-button>
+                <s-button
+                  tone="critical"
+                  commandFor={BULK_MODAL_ID}
+                  command="--show"
+                  {...(selected.size === 0 || busy ? { disabled: true } : {})}
+                  {...(busyIntent === "bulk-delete" ? { loading: true } : {})}
+                  onClick={() => setBulkIntent("bulk-delete")}
+                >
+                  Delete
+                </s-button>
+                {selected.size > 0 && (
+                  <s-button
+                    variant="tertiary"
+                    {...(busy ? { disabled: true } : {})}
+                    onClick={() => setSelected(new Set())}
+                  >
+                    Clear selection
+                  </s-button>
+                )}
+              </s-stack>
+            </s-stack>
+          </s-box>
+
           <s-table-header-row>
-            <s-table-header listSlot="primary">Title</s-table-header>
+            <s-table-header listSlot="primary">
+              <s-stack direction="inline" gap="small" alignItems="center">
+                <s-checkbox
+                  accessibilityLabel="Select every discount in this list"
+                  checked={allSelected}
+                  indeterminate={someSelected}
+                  {...(busy || discounts.length === 0
+                    ? { disabled: true }
+                    : {})}
+                  onChange={(event) => toggleAll(event.currentTarget.checked)}
+                />
+                <s-text>Title</s-text>
+              </s-stack>
+            </s-table-header>
             <s-table-header listSlot="inline">Status</s-table-header>
             <s-table-header listSlot="labeled">Code / Automatic</s-table-header>
             <s-table-header listSlot="labeled">What it does</s-table-header>
@@ -178,20 +372,37 @@ export function DiscountTable({
                   {...(editable ? { clickDelegate: linkId } : {})}
                 >
                   <s-table-cell>
-                    {editable ? (
-                      <s-link
-                        id={linkId}
-                        href={discountPath(
-                          discountTab(discount),
-                          discount.method,
-                          discount.id,
-                        )}
-                      >
-                        {discount.title}
-                      </s-link>
-                    ) : (
-                      <s-text>{discount.title}</s-text>
-                    )}
+                    {/* Ticking the box selects the row; clicking anywhere
+                        else on the row still opens the discount. A grid keeps a long
+                        title wrapping beside the box, not under it. */}
+                    <s-grid
+                      gridTemplateColumns="auto 1fr"
+                      gap="small"
+                      alignItems="center"
+                    >
+                      <s-checkbox
+                        accessibilityLabel={`Select ${discount.title}`}
+                        checked={selected.has(discount.id)}
+                        {...(busy ? { disabled: true } : {})}
+                        onChange={(event) =>
+                          toggleOne(discount.id, event.currentTarget.checked)
+                        }
+                      />
+                      {editable ? (
+                        <s-link
+                          id={linkId}
+                          href={discountPath(
+                            discountTab(discount),
+                            discount.method,
+                            discount.id,
+                          )}
+                        >
+                          {discount.title}
+                        </s-link>
+                      ) : (
+                        <s-text>{discount.title}</s-text>
+                      )}
+                    </s-grid>
                   </s-table-cell>
 
                   <s-table-cell>
@@ -319,6 +530,31 @@ export function DiscountTable({
           onClick={confirmPending}
         >
           {pending?.confirmLabel ?? "Confirm"}
+        </s-button>
+      </s-modal>
+
+      <s-modal id={BULK_MODAL_ID} heading={bulkCopy?.heading ?? "Confirm"}>
+        <s-paragraph>{bulkCopy?.body ?? ""}</s-paragraph>
+
+        <s-button
+          slot="secondary-actions"
+          variant="secondary"
+          commandFor={BULK_MODAL_ID}
+          command="--hide"
+          onClick={() => setBulkIntent(null)}
+        >
+          Cancel
+        </s-button>
+
+        <s-button
+          slot="primary-action"
+          variant="primary"
+          tone={bulkCopy?.critical ? "critical" : "auto"}
+          commandFor={BULK_MODAL_ID}
+          command="--hide"
+          onClick={confirmBulk}
+        >
+          {bulkCopy?.confirmLabel ?? "Confirm"}
         </s-button>
       </s-modal>
     </>

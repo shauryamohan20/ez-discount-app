@@ -124,6 +124,14 @@ own tab in the app:
   Every create and edit page has Save as draft; editing a draft shows
   Publish instead of Save. A draft row has a Publish action, which restores
   the dates. A draft turned on from Shopify's own admin counts as active.
+- Bulk edit on every list (Home and each kind): a checkbox per row, select
+  all in the header, and a bar on top of the list with Activate (publishes
+  drafts), Deactivate, Move to draft and Delete. Activate, Move to draft and
+  Delete ask first. `runDiscountRowAction` handles `bulk-*` intents: up to 250
+  IDs, four at a time, each looked up first (so only this app's discounts
+  change) and skipped when already in the requested state. Failures are
+  listed by title in a banner; the rest still go through. Shopify's own bulk
+  mutations are not used: they cover code discounts only and run as jobs.
 - Method (automatic or code) and kind are locked after creation.
 
 **Other pages**
