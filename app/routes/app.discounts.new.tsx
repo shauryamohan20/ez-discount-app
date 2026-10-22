@@ -4,6 +4,7 @@ import { boundary } from "@shopify/shopify-app-react-router/server";
 
 import { authenticate } from "../shopify.server";
 import { APP_NAME } from "../lib/brand";
+import { KindIcon, type DiscountKindIcon } from "../components/KindIcon";
 
 /**
  * One Function backs every kind of discount, so anything that asks to create
@@ -22,10 +23,17 @@ type TileProps = {
   description: string;
   href: string;
   action: string;
+  icon: DiscountKindIcon;
 };
 
 /** One kind of discount, laid out like the tiles on the Home page. */
-function DiscountKindTile({ title, description, href, action }: TileProps) {
+function DiscountKindTile({
+  title,
+  description,
+  href,
+  action,
+  icon,
+}: TileProps) {
   return (
     <s-box
       background="base"
@@ -36,6 +44,7 @@ function DiscountKindTile({ title, description, href, action }: TileProps) {
       inlineSize="100%"
     >
       <s-stack direction="block" gap="base">
+        <KindIcon kind={icon} />
         <s-text type="strong">{title}</s-text>
         <s-paragraph>{description}</s-paragraph>
         <s-stack direction="inline">
@@ -66,6 +75,7 @@ export default function ChooseDiscountKindPage() {
                 title="Quantity based discount"
                 description="A percentage off the items in the cart, based on how many there are. Use quantity ranges, exact quantities, a cap on discounted units, and product or collection targeting."
                 href="/app/discounts/quantity/new"
+                icon="quantity"
                 action="Create quantity based discount"
               />
             </s-grid-item>
@@ -75,6 +85,7 @@ export default function ChooseDiscountKindPage() {
                 title="Whole order discount"
                 description="A percentage off the entire order, free shipping, or both, once the cart subtotal reaches an amount you set. Spend 50 for free shipping, spend 100 for 10% off."
                 href="/app/discounts/order/new"
+                icon="order"
                 action="Create whole order discount"
               />
             </s-grid-item>
@@ -84,6 +95,7 @@ export default function ChooseDiscountKindPage() {
                 title="Buy X Get Y discount"
                 description="Buy a quantity of some products and get others free or at a percentage off. Buy 2 get 1 free, buy 2 get the third at half price, or buy one product and get a different one."
                 href="/app/discounts/bxgy/new"
+                icon="bxgy"
                 action="Create Buy X Get Y discount"
               />
             </s-grid-item>

@@ -8,6 +8,7 @@ import { boundary } from "@shopify/shopify-app-react-router/server";
 
 import { authenticate } from "../shopify.server";
 import { APP_NAME, APP_WEBSITE_LABEL, APP_WEBSITE_URL } from "../lib/brand";
+import { KindIcon, type DiscountKindIcon } from "../components/KindIcon";
 import { DiscountTable } from "../components/DiscountTable";
 import {
   getBuyXGetYTitles,
@@ -80,10 +81,17 @@ type TileProps = {
   title: string;
   description: string;
   status: string;
+  icon: DiscountKindIcon;
 };
 
 /** One kind of discount. The whole tile is the link to that kind's page. */
-function DiscountKindTile({ href, title, description, status }: TileProps) {
+function DiscountKindTile({
+  href,
+  title,
+  description,
+  status,
+  icon,
+}: TileProps) {
   return (
     <s-clickable
       href={href}
@@ -96,6 +104,7 @@ function DiscountKindTile({ href, title, description, status }: TileProps) {
       inlineSize="100%"
     >
       <s-stack direction="block" gap="small-200">
+        <KindIcon kind={icon} />
         <s-text type="strong">{title}</s-text>
         <s-text>{description}</s-text>
         {status && <s-text color="subdued">{status}</s-text>}
@@ -137,6 +146,7 @@ export default function HomePage() {
             <s-grid-item>
               <DiscountKindTile
                 href="/app/discounts/quantity"
+                icon="quantity"
                 title="Quantity based"
                 description="Take more off the more items a customer buys, with quantity ranges, exact quantities and a cap on discounted units."
                 status={describeCounts(counts?.quantity)}
@@ -146,6 +156,7 @@ export default function HomePage() {
             <s-grid-item>
               <DiscountKindTile
                 href="/app/discounts/order"
+                icon="order"
                 title="Whole order"
                 description="Take a percentage off the entire order once the cart subtotal reaches an amount you set."
                 status={describeCounts(counts?.order)}
@@ -155,6 +166,7 @@ export default function HomePage() {
             <s-grid-item>
               <DiscountKindTile
                 href="/app/discounts/bxgy"
+                icon="bxgy"
                 title="Buy X Get Y"
                 description="Buy a quantity of some products and get others free or at a discount, such as buy 2 get 1 free."
                 status={describeCounts(counts?.bxgy)}

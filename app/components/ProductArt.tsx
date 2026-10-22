@@ -1,10 +1,14 @@
+import { ACCENT, ACCENT_SURFACE } from "../lib/brand";
 import type { DemoArt } from "../lib/preview";
 
-/** Soft background and a deeper ink for each colour a picture can use. */
+/**
+ * Soft background and a deeper ink for each colour a picture can use. The
+ * app's accent comes first; the others keep a cart of pictures varied.
+ */
 const PALETTES = [
+  { background: ACCENT_SURFACE, ink: ACCENT },
   { background: "#FDEBE1", ink: "#D9734A" },
   { background: "#ECE8FE", ink: "#7058E8" },
-  { background: "#DEF4E8", ink: "#2E9466" },
   { background: "#E1EEFB", ink: "#3A7FC4" },
   { background: "#F7EEDB", ink: "#B5853A" },
 ];

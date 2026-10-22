@@ -3,20 +3,21 @@ import type { CSSProperties } from "react";
 import type { DemoLine, PreviewResult } from "../lib/preview";
 import { DEMO_SHIPPING } from "../lib/preview";
 import type { LineNote } from "../lib/preview-explain";
+import { ACCENT, ACCENT_SURFACE } from "../lib/brand";
 import { ProductArt } from "./ProductArt";
 
 /**
- * The demo cart's colours. Purple marks what the discount touched, green
- * what was taken off, and orange a line the discount skipped.
+ * The demo cart's colours. The app's accent marks what the discount touched
+ * and what was taken off, and orange a line the discount skipped.
  */
 const COLOR = {
   text: "#303030",
   subdued: "#616161",
   border: "#E3E3E3",
   surface: "#FFFFFF",
-  accent: "#7458F0",
-  accentSurface: "#F6F3FF",
-  success: "#0C7A43",
+  accent: ACCENT,
+  accentSurface: ACCENT_SURFACE,
+  success: ACCENT,
   skipped: "#B9480F",
 };
 

@@ -244,7 +244,11 @@ order thresholds.
 - `bxgy-form.ts`: the Buy X Get Y part of the form, validation, live preview.
 - `discount-id.ts`: gid helpers, `discountTab`, `discountPath`.
 - `shop-time.ts`: dates in the shop's time zone.
-- `brand.ts`: app name and website.
+- `brand.ts`: app name, website, and the accent colour `ACCENT` (#0e6b4f)
+  with its tint `ACCENT_SURFACE`. Polaris draws its own buttons, badges and
+  links in the admin's colours, which apps cannot change, so the accent is
+  used on what the app draws itself: the demo cart, the product pictures
+  and the discount kind icons (`KindIcon.tsx`) on Home and the create page.
 - `preview.ts`: the live preview engine. Builds a Function input from a demo
   cart, runs the **real Function code** (both targets) in the browser, and
   reads the operations back as money.
