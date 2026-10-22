@@ -469,12 +469,15 @@ locked `cloudflared.exe`. This happened again on 23 October 2026 from a single
 beside a running dev server; use `node scripts/verify-function.mjs` and the
 `pnpm exec graphql-codegen` route for checks.
 
-**"Error while polling app logs"** repeats in the dev terminal. Harmless: it only
-affects showing Function run logs there. Likely cause (not confirmed): the dev
-server subscribes to app logs once at start, Shopify's subscription token
-expires after 30 minutes, and the poller keeps retrying with the expired token.
-A fresh `shopify app logs` subscribed and polled without error. Restarting the
-dev server clears it; Function runs are also in the Dev Dashboard under Logs.
+**"Error while polling app logs"** repeats in the dev terminal from the first
+seconds of every dev session. Harmless: it only affects showing Function run
+logs in that terminal. Not diagnosed. The CLI prints it when the dev server's
+log poller throws, and prints the actual error only with `--verbose`. Ruled
+out: an expired subscription (it starts 2 seconds in) and the account or app
+(a standalone `shopify app logs` with the same login polled without error).
+To find out, run the dev server with `pnpm run dev -- --verbose` and read the
+line printed right after the message. Function runs are also in the Dev
+Dashboard under the app's Logs.
 
 ---
 
