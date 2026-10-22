@@ -215,7 +215,9 @@ export function TieredDiscountForm({
                   <s-checkbox
                     label="Limit to one use per customer"
                     name="appliesOncePerCustomer"
-                    checked={values.appliesOncePerCustomer}
+                    {...(values.appliesOncePerCustomer
+                      ? { checked: true }
+                      : {})}
                     {...(disabled ? { disabled: true } : {})}
                     onChange={(event) =>
                       update({
@@ -280,7 +282,9 @@ export function TieredDiscountForm({
                     : "Let this discount combine with whole order discounts"
                 }
                 name="combinesWithOtherDiscounts"
-                checked={values.combinesWithOtherDiscounts}
+                {...(values.combinesWithOtherDiscounts
+                  ? { checked: true }
+                  : {})}
                 {...(disabled ? { disabled: true } : {})}
                 onChange={(event) =>
                   update({
@@ -292,7 +296,7 @@ export function TieredDiscountForm({
               <s-checkbox
                 label="Let this discount combine with shipping discounts"
                 name="combinesWithShipping"
-                checked={values.combinesWithShipping}
+                {...(values.combinesWithShipping ? { checked: true } : {})}
                 {...(disabled ? { disabled: true } : {})}
                 onChange={(event) =>
                   update({ combinesWithShipping: event.currentTarget.checked })
@@ -528,7 +532,7 @@ export function TieredDiscountForm({
 
                           <s-checkbox
                             label="Also give free shipping"
-                            checked={tier.freeShipping}
+                            {...(tier.freeShipping ? { checked: true } : {})}
                             details="Every shipping option at checkout becomes free."
                             {...(disabled ? { disabled: true } : {})}
                             onChange={(event) =>

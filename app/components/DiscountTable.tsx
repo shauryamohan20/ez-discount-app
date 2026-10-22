@@ -19,6 +19,13 @@ import { DiscountSummary } from "./DiscountSummary";
 const CONFIRM_MODAL_ID = "confirm-discount-action";
 const BULK_MODAL_ID = "confirm-bulk-action";
 
+/*
+ * Boolean attributes on Polaris elements (checked, indeterminate, disabled)
+ * are left out when false, never written as ={false}. The server renders
+ * ={false} as checked="false", and Polaris reads any value as on, so every box
+ * flashed ticked until the page finished loading.
+ */
+
 /** The bulk actions that ask first, and what they say. */
 function bulkConfirmation(intent: BulkIntent, count: number) {
   const discounts = `${count} ${count === 1 ? "discount" : "discounts"}`;
@@ -329,8 +336,8 @@ export function DiscountTable({
               <s-stack direction="inline" gap="small" alignItems="center">
                 <s-checkbox
                   accessibilityLabel="Select every discount in this list"
-                  checked={allSelected}
-                  indeterminate={someSelected}
+                  {...(allSelected ? { checked: true } : {})}
+                  {...(someSelected ? { indeterminate: true } : {})}
                   {...(busy || discounts.length === 0
                     ? { disabled: true }
                     : {})}
@@ -371,7 +378,9 @@ export function DiscountTable({
                     >
                       <s-checkbox
                         accessibilityLabel={`Select ${discount.title}`}
-                        checked={selected.has(discount.id)}
+                        {...(selected.has(discount.id)
+                          ? { checked: true }
+                          : {})}
                         {...(busy ? { disabled: true } : {})}
                         onChange={(event) =>
                           toggleOne(discount.id, event.currentTarget.checked)

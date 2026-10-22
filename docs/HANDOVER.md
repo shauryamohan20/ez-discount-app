@@ -326,6 +326,11 @@ route exists and Shopify wants a session. A real missing route returns 404.
   bundle them and do not need it.
 - **Every page uses `inlineSize="large"`** (the full width), at the owner's
   request. Add it to any new `s-page`.
+- **Never write a boolean attribute on a Polaris element as `={false}`.**
+  The server renders it as `checked="false"`, and Polaris treats any value as
+  on, so the box shows ticked until the page finishes loading. Leave it out
+  instead: `{...(on ? { checked: true } : {})}`. The same applies to
+  `indeterminate`, `disabled` and `loading`.
 - **Browser code must not import values from `*.server.ts`.** Type only
   imports are fine. React Router strips server code only from `loader`,
   `action`, `middleware` and `headers`. Typecheck does not catch this; the
