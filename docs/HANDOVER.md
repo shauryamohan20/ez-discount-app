@@ -291,10 +291,14 @@ order thresholds.
   `TieredDiscountForm` lays the form and the panel out in an `s-grid` (equal
   halves, one column under 1100px of container width); the panel is sticky
   while the form scrolls, and always fits on screen without scrolling inside
-  it: when its content is taller than the space, it is scaled down evenly
-  (measured on load, resize and content change, never while scrolling).
-  Inside the panel, details and the cart sit side by
-  side above 640px of panel width, with "What happens" below both. `s-page`'s `aside` slot is not used, because
+  it: when its content is taller than the space, CSS `zoom` shrinks it and
+  lets it re-flow to the panel's width. Polaris finishes redrawing a moment
+  after a size change and zoom can switch the panel between one and two
+  columns, so `fitPanel` searches for the largest zoom that fits, measuring
+  once drawing settles at each step. It runs on load, resize and content
+  change, never on scroll or in response to its own zoom.
+  Inside the panel, details and "What happens" sit on the
+  left and the cart on the right above 640px of panel width. `s-page`'s `aside` slot is not used, because
   it only exists at the default page width. A demo cart with quantity
   buttons, a shopper picker (guest, new, returning), totals with shipping, and
   "What happens" sentences, a reset button. Every kind of discount.

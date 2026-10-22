@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { DiscountFormValues } from "../lib/discount-form";
 import {
@@ -62,72 +62,103 @@ export function DiscountPreviewPanel({ values, currencyCode }: Props) {
   useEffect(() => setInBrowser(true), []);
 
   // The whole panel fits on screen at any screen size, without scrolling
-  // inside it: when its content is taller than the space, the content is
-  // scaled down evenly until it fits, and it stays full size when there is
-  // room. The space runs from where the panel rests at the top of the page
-  // to the bottom of the screen. It is measured on load, on resize and when
-  // the content changes, not while scrolling, so the panel never changes
-  // size as the page scrolls. Below the form on narrow screens it can rest
-  // far down, so that distance counts for at most 120px.
+  // inside it: when its content is taller than the space, CSS zoom shrinks
+  // it evenly and lets it re-flow to fill the panel's width, and it stays
+  // full size when there is room. The space runs from where the panel rests
+  // at the top of the page to the bottom of the screen; below the form on
+  // narrow screens it can rest far down, so that distance counts for at most
+  // 120px.
+  //
+  // Polaris finishes redrawing its elements a moment after a size change, so
+  // each round waits for drawing to settle before measuring. Fitting runs on
+  // load, on resize and when the content changes, never in response to its
+  // own zoom, and starts from the current zoom so the panel does not flash.
   const panelRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
+  const fitRun = useRef(0);
+  const restingTop = useRef<number | null>(null);
+
+  const fitPanel = useCallback(() => {
+    const run = ++fitRun.current;
+    const settled = () =>
+      new Promise<boolean>((resolve) =>
+        requestAnimationFrame(() =>
+          requestAnimationFrame(() => resolve(run === fitRun.current)),
+        ),
+      );
+
+    void (async () => {
+      if (!(await settled())) return;
+
+      const panel = panelRef.current;
+      const content = contentRef.current;
+      if (!panel || !content) return;
+
+      if (restingTop.current === null || window.scrollY === 0) {
+        const top = panel.getBoundingClientRect().top;
+        restingTop.current = Math.min(Math.max(top, 16), 120);
+      }
+      // 16px clear below the panel, plus 8px so rounding never tips it over.
+      const available = Math.max(
+        200,
+        window.innerHeight - restingTop.current - 24,
+      );
+
+      const setZoom = (zoom: number) => {
+        content.style.zoom = zoom >= 1 ? "" : String(zoom);
+      };
+
+      const height = () => content.getBoundingClientRect().height;
+
+      // Nothing to do while the current zoom fits and leaves little room.
+      const current = Number(content.style.zoom || 1);
+      const now = height();
+      if (now <= available + 1 && (current >= 1 || now >= available * 0.97)) {
+        return;
+      }
+
+      // Zooming can switch the panel between one and two columns, so the
+      // height jumps rather than changing smoothly. A search, measuring once
+      // drawing settles at each step, finds the largest zoom that fits.
+      const fitsAt = async (zoom: number) => {
+        setZoom(zoom);
+        if (!(await settled())) return null;
+        return height() <= available + 1;
+      };
+
+      const fullSize = await fitsAt(1);
+      if (fullSize !== false) return;
+
+      let low = 0.4;
+      let high = 1;
+      for (let round = 0; round < 7; round++) {
+        const middle = (low + high) / 2;
+        const fits = await fitsAt(middle);
+        if (fits === null) return;
+        if (fits) low = middle;
+        else high = middle;
+      }
+
+      setZoom(low);
+      if (!(await settled())) return;
+
+      // Never leave it taller than the space, whatever drawing settled on.
+      const final = height();
+      if (final > available + 1) {
+        setZoom(Math.max(0.4, low * (available / final) - 0.005));
+      }
+    })();
+  }, []);
 
   useEffect(() => {
     if (!inBrowser) return;
 
-    const panel = panelRef.current;
-    const content = contentRef.current;
-    if (!panel || !content) return;
-
-    let restingTop: number | null = null;
-    let frame = 0;
-
-    const fit = () => {
-      const top = panel.getBoundingClientRect().top;
-      if (restingTop === null || window.scrollY === 0) {
-        restingTop = Math.min(Math.max(top, 16), 120);
-      }
-
-      const available = Math.max(200, window.innerHeight - restingTop - 16);
-      const width = panel.clientWidth;
-
-      // Content laid out wider and scaled down by the same factor fills the
-      // panel's width exactly. A wider layout is shorter, so a few rounds
-      // settle the scale.
-      let scale = 1;
-      content.style.transform = "";
-      content.style.width = "";
-      for (let round = 0; round < 4; round++) {
-        content.style.width = scale < 1 ? `${width / scale}px` : "";
-        const next = Math.min(1, available / content.offsetHeight);
-        if (Math.abs(next - scale) < 0.005) break;
-        scale = next;
-      }
-      content.style.width = scale < 1 ? `${width / scale}px` : "";
-      scale = Math.min(scale, available / content.offsetHeight, 1);
-
-      content.style.transformOrigin = "top left";
-      content.style.transform = scale < 1 ? `scale(${scale})` : "";
-      panel.style.height =
-        scale < 1 ? `${Math.ceil(content.offsetHeight * scale)}px` : "";
-    };
-
-    const schedule = () => {
-      cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(fit);
-    };
-
-    fit();
-    const observer = new ResizeObserver(schedule);
-    observer.observe(content);
-    window.addEventListener("resize", schedule);
-
+    window.addEventListener("resize", fitPanel);
     return () => {
-      cancelAnimationFrame(frame);
-      observer.disconnect();
-      window.removeEventListener("resize", schedule);
+      fitRun.current += 1;
+      window.removeEventListener("resize", fitPanel);
     };
-  }, [inBrowser]);
+  }, [inBrowser, fitPanel]);
 
   const preview = useMemo(() => buildPreview(values), [values]);
   const lines = useMemo<DemoLine[]>(
@@ -154,6 +185,11 @@ export function DiscountPreviewPanel({ values, currencyCode }: Props) {
       return null;
     }
   }, [inBrowser, preview, lines, shopper]);
+
+  // Refit whenever what the panel shows changes.
+  useEffect(() => {
+    if (result) fitPanel();
+  }, [result, values, fitPanel]);
 
   if (!result) return null;
 
@@ -194,7 +230,7 @@ export function DiscountPreviewPanel({ values, currencyCode }: Props) {
       <div ref={contentRef}>
         <s-section heading="Demo cart">
           <s-stack direction="block" gap="base">
-            {/* Details on the left and the cart on the right when the panel is
+            {/* Details and What happens on the left, the cart on the right, when the panel is
               wide enough, one above the other when it is not. */}
             <s-query-container>
               <s-grid
@@ -237,6 +273,19 @@ export function DiscountPreviewPanel({ values, currencyCode }: Props) {
                       Reset demo cart
                     </s-button>
                   </s-stack>
+
+                  {/* Under the details, beside the cart, so the panel uses
+                      the space next to the cart instead of growing taller. */}
+                  <s-divider />
+
+                  <s-stack direction="block" gap="small-200">
+                    <s-heading>What happens</s-heading>
+                    <s-unordered-list>
+                      {explanations.map((text) => (
+                        <s-list-item key={text}>{text}</s-list-item>
+                      ))}
+                    </s-unordered-list>
+                  </s-stack>
                 </s-stack>
 
                 <DemoCart
@@ -254,17 +303,6 @@ export function DiscountPreviewPanel({ values, currencyCode }: Props) {
                 />
               </s-grid>
             </s-query-container>
-
-            <s-divider />
-
-            <s-stack direction="block" gap="small-200">
-              <s-heading>What happens</s-heading>
-              <s-unordered-list>
-                {explanations.map((text) => (
-                  <s-list-item key={text}>{text}</s-list-item>
-                ))}
-              </s-unordered-list>
-            </s-stack>
           </s-stack>
         </s-section>
       </div>
