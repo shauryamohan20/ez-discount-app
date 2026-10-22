@@ -276,6 +276,11 @@ order thresholds.
 - `TieredDiscountForm.tsx`: the shared form shell (method, details, applies
   to, customers, tiers or thresholds). Renders `BuyXGetYFields` for that kind.
 - `BuyXGetYFields.tsx`, `ResourceSelector.tsx` (Shopify resource picker).
+- `DemoCart.tsx` and `ProductArt.tsx`: the demo cart tile. A card per line
+  with a drawn placeholder picture (inline SVG, no image hosting), purple
+  when discounted, a dashed outline when not in the cart, and a status line
+  from `cartLineNotes` in `preview-explain.ts`: what was taken off, or why
+  nothing was. A whole order discount is shared across lines by value.
 - `DiscountFormActions.tsx`: the page buttons every create and edit page
   shares (Save or Publish, Save as draft, Cancel) and the draft banner.
 - `DiscountPreviewPanel.tsx`: the live preview beside the form.

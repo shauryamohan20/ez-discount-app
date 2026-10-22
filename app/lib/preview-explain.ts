@@ -543,3 +543,167 @@ export function explainBuyXGetY(
 
   return sentences;
 }
+
+/** What the demo cart says under one line. */
+export type LineNote =
+  | { state: "applied"; label: string; amount: number }
+  | { state: "counts"; label: string }
+  | { state: "none"; label: string; detail: string }
+  | { state: "empty" };
+
+/** "10% OFF" reads as "10% off"; "Buy 2 Get 1 Free" is left as it is. */
+function readableMessage(message: string | null, fallback: string): string {
+  if (!message) return fallback;
+  return message === message.toUpperCase() ? message.toLowerCase() : message;
+}
+
+function notApplied(detail: string): LineNote {
+  return { state: "none", label: "Discount doesn't apply", detail };
+}
+
+/**
+ * The status line under each demo cart line: what was taken off it, or why
+ * nothing was. A whole order discount is shared across the lines by value,
+ * the way Shopify spreads it at checkout. The amounts come from the
+ * Function's result; only the reasons are worked out here.
+ */
+export function cartLineNotes(
+  values: DiscountFormValues,
+  lines: DemoLine[],
+  result: PreviewResult,
+  shopperQualifies: boolean,
+  currencyCode: string,
+): Map<string, LineNote> {
+  const notes = new Map<string, LineNote>();
+  const money = (amount: number) => formatMoney(amount, currencyCode);
+  const inCart = lines.filter((line) => line.quantity > 0);
+
+  // The order discount, spread by line value, with rounding left on the last
+  // line so the shares add up to the total exactly.
+  const orderShares = new Map<string, number>();
+  if (result.orderDiscount > 0 && result.subtotal > 0) {
+    let remainingCents = Math.round(result.orderDiscount * 100);
+    inCart.forEach((line, index) => {
+      const lineCents = Math.round(line.unitPrice * 100) * line.quantity;
+      const shareCents =
+        index === inCart.length - 1
+          ? remainingCents
+          : Math.round(
+              (lineCents * result.orderDiscount * 100) /
+                Math.round(result.subtotal * 100),
+            );
+      remainingCents -= shareCents;
+      orderShares.set(line.id, shareCents / 100);
+    });
+  }
+
+  const quantity = previewQuantityTiers(values).tiers;
+  const appliesTo = previewAppliesTo(values);
+  const counted = lines
+    .filter((line) => line.quantity > 0 && countsTowardTiers(line, appliesTo))
+    .reduce((sum, line) => sum + line.quantity, 0);
+  const tierReached = quantity.some(
+    (tier) =>
+      counted >= tier.minQuantity &&
+      (tier.maxQuantity === null || counted <= tier.maxQuantity),
+  );
+
+  const order = previewOrderTiers(values).tiers;
+  const freeShippingOnly =
+    result.shippingDiscount > 0 && result.orderDiscount === 0;
+
+  const bxgy = values.bxgy;
+  const buyIds = previewScopeIds(values, "buy");
+  const getIds = previewScopeIds(values, "get");
+  const canBuy = (line: DemoLine) =>
+    bxgy.buyScopeKind === "all" ||
+    (bxgy.buyScopeKind === "products"
+      ? buyIds.includes(line.productId)
+      : line.inBuyCollection);
+  const canGet = (line: DemoLine) =>
+    bxgy.getScopeKind === "same_as_buy"
+      ? canBuy(line)
+      : bxgy.getScopeKind === "products"
+        ? getIds.includes(line.productId)
+        : line.inGetCollection;
+
+  for (const line of lines) {
+    if (line.quantity === 0) {
+      notes.set(line.id, { state: "empty" });
+      continue;
+    }
+
+    const shown = result.lines.find((entry) => entry.id === line.id);
+    if (shown && shown.discount > 0) {
+      notes.set(line.id, {
+        state: "applied",
+        label: `${readableMessage(shown.message, "Discount")} applied`,
+        amount: shown.discount,
+      });
+      continue;
+    }
+
+    const share = orderShares.get(line.id);
+    if (share && share > 0) {
+      notes.set(line.id, {
+        state: "applied",
+        label: `${readableMessage(result.orderMessage, "Order discount")} applied`,
+        amount: share,
+      });
+      continue;
+    }
+
+    if (!shopperQualifies) {
+      notes.set(line.id, notApplied("This shopper doesn't qualify"));
+      continue;
+    }
+
+    if (values.discountType === "order_threshold") {
+      if (freeShippingOnly) {
+        notes.set(line.id, {
+          state: "counts",
+          label: "Counts toward free shipping",
+        });
+      } else if (!order.length) {
+        notes.set(line.id, notApplied("No thresholds set yet"));
+      } else {
+        notes.set(
+          line.id,
+          notApplied(`Cart is below ${money(order[0].minSubtotal)}`),
+        );
+      }
+      continue;
+    }
+
+    if (values.discountType === "buy_x_get_y") {
+      if (canBuy(line)) {
+        notes.set(line.id, {
+          state: "counts",
+          label: "Counts as a bought item",
+        });
+      } else if (canGet(line)) {
+        notes.set(line.id, notApplied("Add more bought items to unlock it"));
+      } else {
+        notes.set(line.id, notApplied("Not part of this offer"));
+      }
+      continue;
+    }
+
+    if (!countsTowardTiers(line, appliesTo)) {
+      notes.set(
+        line.id,
+        notApplied(
+          values.appliesToType === "collections"
+            ? "Not in the chosen collections"
+            : "Not one of this discount's products",
+        ),
+      );
+    } else if (!tierReached) {
+      notes.set(line.id, notApplied("Not enough items for a tier yet"));
+    } else {
+      notes.set(line.id, notApplied("Over the unit limit"));
+    }
+  }
+
+  return notes;
+}

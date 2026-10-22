@@ -10,7 +10,7 @@
  */
 import { selectionFor, type BxgyResource } from "./bxgy-form";
 import type { DiscountFormValues, ResourceRef } from "./discount-form";
-import type { DemoLine } from "./preview";
+import type { DemoArt, DemoLine } from "./preview";
 import type { BuyXGetY } from "./tiers";
 
 export const STAND_IN_PRODUCT: ResourceRef = {
@@ -46,6 +46,25 @@ type LineOptions = {
   inGetCollection?: boolean;
 };
 
+/** A picture that suits the line's name, so the demo cart reads at a glance. */
+function artFor(key: string, title: string): DemoArt {
+  if (key === "other") return "box";
+  const name = title.toLowerCase();
+  if (name.includes("t-shirt")) return "tshirt";
+  if (name.includes("hoodie")) return "hoodie";
+  if (name.includes("cap")) return "cap";
+  if (name.includes("socks")) return "socks";
+  if (name.startsWith("item from")) return "tag";
+  return "bag";
+}
+
+/** A steady colour per line, so a picture keeps its colour as the cart changes. */
+function tintFor(key: string): number {
+  let hash = 0;
+  for (const char of key) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
+  return hash;
+}
+
 function demoLine(
   key: string,
   title: string,
@@ -62,6 +81,8 @@ function demoLine(
     inSelectedCollection: options.inSelectedCollection ?? false,
     inBuyCollection: options.inBuyCollection ?? false,
     inGetCollection: options.inGetCollection ?? false,
+    art: artFor(key, title),
+    tint: tintFor(key),
   };
 }
 

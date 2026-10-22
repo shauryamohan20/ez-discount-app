@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 
 import type { DiscountFormValues } from "../lib/discount-form";
 import {
-  DEMO_SHIPPING,
   DEMO_SHOPPER_LABELS,
   formatMoney,
   isDemoShopper,
@@ -15,8 +14,10 @@ import {
   explainBuyXGetY,
   explainCommonOptions,
   explainOrderThresholds,
+  cartLineNotes,
   explainQuantityTiers,
 } from "../lib/preview-explain";
+import { DemoCart } from "./DemoCart";
 import type { CustomerEligibility } from "../lib/tiers";
 
 type Props = {
@@ -105,9 +106,6 @@ export function DiscountPreviewPanel({ values, currencyCode }: Props) {
         ? explainBuyXGetY(values, result)
         : explainQuantityTiers(values, lines);
 
-  const totalDiscount =
-    result.productDiscount + result.orderDiscount + result.shippingDiscount;
-
   const explanations = [
     ...(qualifies
       ? []
@@ -169,109 +167,19 @@ export function DiscountPreviewPanel({ values, currencyCode }: Props) {
                 </s-stack>
               </s-stack>
 
-              <s-box padding="base" border="base" borderRadius="base">
-                <s-stack direction="block" gap="small-200">
-                  {lines.map((line) => {
-                    const shown = result.lines.find(
-                      (entry) => entry.id === line.id,
-                    );
-
-                    return (
-                      <s-grid
-                        key={line.id}
-                        gridTemplateColumns="1fr auto"
-                        gap="small-200"
-                        alignItems="center"
-                      >
-                        <s-stack direction="block">
-                          <s-text>{line.title}</s-text>
-                          <s-text color="subdued">
-                            {money(line.unitPrice)} each
-                          </s-text>
-                          {shown && shown.discount > 0 && (
-                            <s-text tone="success">
-                              {shown.message ?? "Discount"}: -
-                              {money(shown.discount)}
-                            </s-text>
-                          )}
-                        </s-stack>
-                        <s-stack
-                          direction="inline"
-                          gap="small-200"
-                          alignItems="center"
-                        >
-                          <s-button
-                            variant="tertiary"
-                            icon="minus"
-                            accessibilityLabel={`One less ${line.title}`}
-                            {...(line.quantity === 0 ? { disabled: true } : {})}
-                            onClick={() => changeQuantity(line, -1)}
-                          />
-                          <s-text>{line.quantity}</s-text>
-                          <s-button
-                            variant="tertiary"
-                            icon="plus"
-                            accessibilityLabel={`One more ${line.title}`}
-                            onClick={() => changeQuantity(line, 1)}
-                          />
-                        </s-stack>
-                      </s-grid>
-                    );
-                  })}
-
-                  <s-divider />
-
-                  <s-grid gridTemplateColumns="1fr auto" gap="small-200">
-                    <s-text>Subtotal</s-text>
-                    <s-text>{money(result.subtotal)}</s-text>
-
-                    {result.productDiscount > 0 && (
-                      <>
-                        <s-text tone="success">Product discounts</s-text>
-                        <s-text tone="success">
-                          -{money(result.productDiscount)}
-                        </s-text>
-                      </>
-                    )}
-
-                    {result.orderDiscount > 0 && (
-                      <>
-                        <s-text tone="success">
-                          {result.orderMessage ?? "Order discount"}
-                        </s-text>
-                        <s-text tone="success">
-                          -{money(result.orderDiscount)}
-                        </s-text>
-                      </>
-                    )}
-
-                    <s-text>{DEMO_SHIPPING.title}</s-text>
-                    {result.shippingPrice === 0 ? (
-                      <s-text color="subdued">Empty cart</s-text>
-                    ) : result.shippingDiscount >= result.shippingPrice ? (
-                      <s-stack direction="inline" gap="small-200">
-                        <s-text color="subdued">
-                          <s>{money(result.shippingPrice)}</s>
-                        </s-text>
-                        <s-text tone="success">Free</s-text>
-                      </s-stack>
-                    ) : (
-                      <s-text>
-                        {money(result.shippingPrice - result.shippingDiscount)}
-                      </s-text>
-                    )}
-
-                    <s-text type="strong">Total</s-text>
-                    <s-text type="strong">{money(result.total)}</s-text>
-                  </s-grid>
-
-                  {totalDiscount > 0 && (
-                    <s-badge tone="success">
-                      Customer saves {money(totalDiscount)}
-                    </s-badge>
-                  )}
-                </s-stack>
-              </s-box>
+              <DemoCart
+                lines={lines}
+                result={result}
+                notes={cartLineNotes(
+                  values,
+                  lines,
+                  result,
+                  qualifies,
+                  currencyCode,
+                )}
+                money={money}
+                onQuantity={changeQuantity}
+              />
             </s-grid>
           </s-query-container>
 

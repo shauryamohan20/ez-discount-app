@@ -29,7 +29,20 @@ export type DemoLine = {
   inSelectedCollection: boolean;
   inBuyCollection: boolean;
   inGetCollection: boolean;
+  /** The placeholder picture shown for this line. Display only. */
+  art: DemoArt;
+  /** Which colour the picture uses. Display only. */
+  tint: number;
 };
+
+export type DemoArt =
+  | "tshirt"
+  | "hoodie"
+  | "cap"
+  | "socks"
+  | "bag"
+  | "box"
+  | "tag";
 
 /** Who is shopping, which decides the customer eligibility rules. */
 export type DemoShopper = "guest" | "newCustomer" | "returning";
