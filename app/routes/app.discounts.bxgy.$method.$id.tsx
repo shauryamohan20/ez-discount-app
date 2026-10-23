@@ -18,6 +18,7 @@ import {
   savingAsFrom,
 } from "../components/DiscountFormActions";
 import { TieredDiscountForm } from "../components/TieredDiscountForm";
+import { useScrollToFirstError } from "../components/useScrollToFirstError";
 import { DiscountNotFound } from "../components/DiscountNotFound";
 import { blankBxgyForm, bxgyToFormValues } from "../lib/bxgy-form";
 import {
@@ -147,6 +148,7 @@ export default function EditBuyXGetYPage() {
     ? clientErrors
     : (serverResult?.errors ?? {});
   const formError = serverResult?.formError ?? null;
+  useScrollToFirstError(errors, formError);
 
   const save = (saveAs: "save" | "draft") => {
     const validation = validateDiscountForm(values);

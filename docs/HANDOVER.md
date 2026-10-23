@@ -293,6 +293,11 @@ order thresholds; 8 maxDiscountAmount on order thresholds.
   when discounted, a dashed outline when not in the cart, and a status line
   from `cartLineNotes` in `preview-explain.ts`: what was taken off, or why
   nothing was. A whole order discount is shared across lines by value.
+- `useScrollToFirstError.ts`: after a failed save (client checks or the
+  server's errors), scrolls the first problem on the page into view and
+  focuses it when it is a field. A problem is a Polaris element with an
+  `error`, a critical banner, or critical text. Polaris hosts can have no box
+  of their own, so it scrolls to the first box inside or around them.
 - `DiscountFormActions.tsx`: the page buttons every create and edit page
   shares (Save or Publish, Save as draft, Cancel) and the draft banner. It also
   guards unsaved changes (`dirty`, the form compared with what was loaded):

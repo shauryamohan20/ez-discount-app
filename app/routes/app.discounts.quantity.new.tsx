@@ -13,6 +13,7 @@ import {
   savingAsFrom,
 } from "../components/DiscountFormActions";
 import { TieredDiscountForm } from "../components/TieredDiscountForm";
+import { useScrollToFirstError } from "../components/useScrollToFirstError";
 import { saveDiscountFromForm } from "../models/discount-save.server";
 import {
   formValuesToSubmission,
@@ -71,6 +72,7 @@ export default function NewDiscountPage() {
     ? clientErrors
     : (fetcher.data?.errors ?? {});
   const formError = fetcher.data?.formError ?? null;
+  useScrollToFirstError(errors, formError);
 
   const save = (saveAs: "save" | "draft") => {
     const validation = validateDiscountForm(values);
