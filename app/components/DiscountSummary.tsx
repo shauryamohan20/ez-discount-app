@@ -2,6 +2,7 @@ import type { TieredDiscount } from "../models/discounts.server";
 import {
   CUSTOMER_ELIGIBILITY_LABELS,
   describeBuyXGetY,
+  describeSchedule,
   summarizeAppliesTo,
   summarizeBuyXGetY,
   formatThreshold,
@@ -40,6 +41,11 @@ export function DiscountSummary({ discount, titles }: Props) {
       ? "All customers"
       : CUSTOMER_ELIGIBILITY_LABELS[config.customerEligibility];
 
+  // Only discounts limited to certain days or hours say when they run.
+  const when = config.schedule ? (
+    <s-text color="subdued">{describeSchedule(config.schedule)}</s-text>
+  ) : null;
+
   if (config.type === "buy_x_get_y") {
     return (
       <s-stack direction="block" gap="small-500">
@@ -51,6 +57,7 @@ export function DiscountSummary({ discount, titles }: Props) {
           )}
         </s-text>
         <s-text color="subdued">{customers}</s-text>
+        {when}
       </s-stack>
     );
   }
@@ -65,6 +72,7 @@ export function DiscountSummary({ discount, titles }: Props) {
             : `, at most ${formatThreshold(config.maxDiscountAmount)} off`}
         </s-text>
         <s-text color="subdued">Whole order, {customers.toLowerCase()}</s-text>
+        {when}
       </s-stack>
     );
   }
@@ -75,6 +83,7 @@ export function DiscountSummary({ discount, titles }: Props) {
       <s-text color="subdued">
         {summarizeAppliesTo(config.appliesTo)}, {customers.toLowerCase()}
       </s-text>
+      {when}
     </s-stack>
   );
 }

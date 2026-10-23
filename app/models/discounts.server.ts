@@ -18,6 +18,7 @@ import {
   type CustomerEligibility,
   type DiscountType,
   type OrderTier,
+  type Schedule,
   type Tier,
   type TierConfig,
 } from "../lib/tiers";
@@ -406,6 +407,8 @@ export type TieredDiscountInput = {
   draft?: boolean;
   /** Order thresholds only: the most taken off, in the shop's currency. */
   maxDiscountAmount?: number | null;
+  /** The days and hours it runs, or null for any time. */
+  schedule?: Schedule | null;
 };
 
 export type DiscountUserError = {
@@ -459,9 +462,14 @@ function configMetafieldValues(input: TieredDiscountInput): {
     }
 
     return {
-      config: serializeBuyXGetYConfig(input.bxgy, input.customerEligibility),
+      config: serializeBuyXGetYConfig(
+        input.bxgy,
+        input.customerEligibility,
+        input.schedule ?? null,
+      ),
       variables: serializeInputVariables(
         collectionVariablesForBuyXGetY(input.bxgy),
+        input.schedule ?? null,
       ),
     };
   }
@@ -473,9 +481,11 @@ function configMetafieldValues(input: TieredDiscountInput): {
       input.appliesTo,
       input.customerEligibility,
       input.maxDiscountAmount ?? null,
+      input.schedule ?? null,
     ),
     variables: serializeInputVariables(
       collectionVariablesForAppliesTo(input.appliesTo),
+      input.schedule ?? null,
     ),
   };
 }

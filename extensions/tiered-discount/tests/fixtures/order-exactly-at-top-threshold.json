@@ -3,6 +3,13 @@
     "export": "cart-lines-discounts-generate-run",
     "target": "cart.lines.discounts.generate.run",
     "input": {
+      "shop": {
+        "localTime": {
+          "date": "2026-10-19",
+          "afterScheduleStart": true,
+          "afterScheduleEnd": true
+        }
+      },
       "cart": {
         "buyerIdentity": null,
         "cost": {

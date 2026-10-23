@@ -93,7 +93,47 @@ type RunOptions = {
   lines: DemoLine[];
   shopper: DemoShopper;
   shipping?: DemoShipping;
+  /** The store clock the Function sees. Defaults to a Monday at noon. */
+  clock?: StoreClock;
 };
+
+/** The store clock as the Function reads it, for a demo day and time. */
+export type StoreClock = {
+  date: string;
+  afterScheduleStart: boolean;
+  afterScheduleEnd: boolean;
+};
+
+/** A real week, Monday 19 October 2026 to Sunday 25 October, for demo days. */
+const DEMO_WEEK: Record<number, string> = {
+  1: "2026-10-19",
+  2: "2026-10-20",
+  3: "2026-10-21",
+  4: "2026-10-22",
+  5: "2026-10-23",
+  6: "2026-10-24",
+  0: "2026-10-25",
+};
+
+/**
+ * What the Function would read from the store clock on a demo day (0 is
+ * Sunday) at a demo time ("HH:MM"): the date, and whether that time is at or
+ * past the schedule's start and end, as timeAfter() answers it.
+ */
+export function demoClock(
+  day: number,
+  time: string,
+  startTime: string | null,
+  endTime: string | null,
+): StoreClock {
+  return {
+    date: DEMO_WEEK[day] ?? DEMO_WEEK[1],
+    afterScheduleStart: time >= (startTime ?? "00:00"),
+    afterScheduleEnd: time >= (endTime ?? "00:00"),
+  };
+}
+
+const NOON_MONDAY = demoClock(1, "12:00", null, null);
 
 function toCents(amount: number): number {
   return Math.round(amount * 100);
@@ -141,6 +181,7 @@ export function runPreview({
   lines,
   shopper,
   shipping = DEMO_SHIPPING,
+  clock = NOON_MONDAY,
 }: RunOptions): PreviewResult {
   const inCart = lines.filter((line) => line.quantity > 0);
   const subtotalCents = inCart.reduce(
@@ -176,6 +217,7 @@ export function runPreview({
       })),
     },
     presentmentCurrencyRate: "1.0",
+    shop: { localTime: clock },
     discount,
   };
 
@@ -186,6 +228,7 @@ export function runPreview({
       deliveryGroups: [{ deliveryOptions: [{ handle: shipping.handle }] }],
     },
     presentmentCurrencyRate: "1.0",
+    shop: { localTime: clock },
     discount,
   };
 

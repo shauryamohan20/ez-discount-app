@@ -1,0 +1,75 @@
+{
+  "payload": {
+    "export": "cart-delivery-options-discounts-generate-run",
+    "target": "cart.delivery-options.discounts.generate.run",
+    "input": {
+      "shop": {
+        "localTime": {
+          "date": "2026-10-19",
+          "afterScheduleStart": false,
+          "afterScheduleEnd": true
+        }
+      },
+      "cart": {
+        "buyerIdentity": null,
+        "cost": {
+          "subtotalAmount": {
+            "amount": "150.00"
+          }
+        },
+        "deliveryGroups": [
+          {
+            "deliveryOptions": [
+              {
+                "handle": "standard"
+              }
+            ]
+          }
+        ]
+      },
+      "presentmentCurrencyRate": "1.0",
+      "discount": {
+        "discountClasses": [
+          "ORDER",
+          "SHIPPING"
+        ],
+        "metafield": {
+          "jsonValue": {
+            "version": 9,
+            "type": "order_threshold",
+            "tiers": [
+              {
+                "minSubtotal": 100,
+                "percentage": 10,
+                "freeShipping": true
+              }
+            ],
+            "maxDiscountAmount": null,
+            "schedule": {
+              "days": [
+                0,
+                1,
+                2,
+                3,
+                4,
+                5,
+                6
+              ],
+              "startTime": "22:00",
+              "endTime": "06:00"
+            },
+            "appliesTo": {
+              "type": "all",
+              "productIds": [],
+              "collectionIds": []
+            },
+            "customerEligibility": "all"
+          }
+        }
+      }
+    },
+    "output": {
+      "operations": []
+    }
+  }
+}

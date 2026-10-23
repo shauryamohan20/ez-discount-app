@@ -12,6 +12,7 @@ import {
 } from "./order_threshold";
 import {
   isCustomerEligible,
+  isWithinSchedule,
   readConfig,
   type CustomerEligibility,
 } from "./shared";
@@ -44,6 +45,8 @@ export function cartDeliveryOptionsDiscountsGenerateRun(
   ) {
     return NOTHING;
   }
+
+  if (!isWithinSchedule(config.schedule, input.shop.localTime)) return NOTHING;
 
   const tiers = validOrderTiers(config.tiers);
   if (!tiers.length) return NOTHING;

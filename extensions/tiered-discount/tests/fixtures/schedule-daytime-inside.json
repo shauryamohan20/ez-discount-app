@@ -1,0 +1,110 @@
+{
+  "payload": {
+    "export": "cart-lines-discounts-generate-run",
+    "target": "cart.lines.discounts.generate.run",
+    "input": {
+      "shop": {
+        "localTime": {
+          "date": "2026-10-19",
+          "afterScheduleStart": true,
+          "afterScheduleEnd": false
+        }
+      },
+      "cart": {
+        "buyerIdentity": null,
+        "cost": {
+          "subtotalAmount": {
+            "amount": "150.00"
+          }
+        },
+        "lines": [
+          {
+            "id": "gid://shopify/CartLine/0",
+            "quantity": 1,
+            "merchandise": {
+              "__typename": "ProductVariant",
+              "id": "gid://shopify/ProductVariant/100",
+              "product": {
+                "id": "gid://shopify/Product/200",
+                "inSelectedCollection": false,
+                "inBuyCollection": false,
+                "inGetCollection": false
+              }
+            },
+            "cost": {
+              "amountPerQuantity": {
+                "amount": "150.00"
+              }
+            }
+          }
+        ]
+      },
+      "presentmentCurrencyRate": "1.0",
+      "discount": {
+        "discountClasses": [
+          "ORDER",
+          "SHIPPING"
+        ],
+        "metafield": {
+          "jsonValue": {
+            "version": 9,
+            "type": "order_threshold",
+            "tiers": [
+              {
+                "minSubtotal": 100,
+                "percentage": 10,
+                "freeShipping": true
+              }
+            ],
+            "maxDiscountAmount": null,
+            "schedule": {
+              "days": [
+                0,
+                1,
+                2,
+                3,
+                4,
+                5,
+                6
+              ],
+              "startTime": "09:00",
+              "endTime": "17:00"
+            },
+            "appliesTo": {
+              "type": "all",
+              "productIds": [],
+              "collectionIds": []
+            },
+            "customerEligibility": "all"
+          }
+        }
+      }
+    },
+    "output": {
+      "operations": [
+        {
+          "orderDiscountsAdd": {
+            "candidates": [
+              {
+                "message": "10% OFF YOUR ORDER",
+                "targets": [
+                  {
+                    "orderSubtotal": {
+                      "excludedCartLineIds": []
+                    }
+                  }
+                ],
+                "value": {
+                  "percentage": {
+                    "value": "10"
+                  }
+                }
+              }
+            ],
+            "selectionStrategy": "FIRST"
+          }
+        }
+      ]
+    }
+  }
+}

@@ -17,6 +17,10 @@ import {
 } from "../lib/discount-form";
 import {
   CUSTOMER_ELIGIBILITY_LABELS,
+  DAY_FULL_NAMES,
+  SCHEDULE_TIME_OPTIONS,
+  WEEK_ORDER,
+  formatScheduleTime,
   MAX_TIERS,
   isCustomerEligibility,
   type AppliesToType,
@@ -440,6 +444,94 @@ export function TieredDiscountForm({
                     themselves at checkout.
                   </s-paragraph>
                 </s-banner>
+              )}
+            </s-stack>
+          </s-section>
+
+          <s-section heading="Days and hours">
+            <s-stack direction="block" gap="base">
+              <s-paragraph>
+                When the discount runs, in your store&apos;s time zone, between its
+                start and end dates. Outside these days and hours it does not
+                apply.
+              </s-paragraph>
+
+              <s-choice-list
+                label="Days"
+                name="scheduleDays"
+                multiple
+                values={values.scheduleDays.map(String)}
+                {...(errors.schedule && values.scheduleDays.length === 0
+                  ? { error: errors.schedule }
+                  : {})}
+                {...(disabled ? { disabled: true } : {})}
+                onChange={(event) => {
+                  const list =
+                    event.currentTarget as HTMLElementTagNameMap["s-choice-list"];
+                  update({ scheduleDays: [...list.values].map(Number) });
+                }}
+              >
+                {WEEK_ORDER.map((day) => (
+                  <s-choice key={day} value={String(day)}>
+                    {DAY_FULL_NAMES[day]}
+                  </s-choice>
+                ))}
+              </s-choice-list>
+
+              <s-checkbox
+                label="Only during set hours"
+                name="scheduleHours"
+                details="Leave unticked to run all day on the days above."
+                {...(values.scheduleHours ? { checked: true } : {})}
+                {...(disabled ? { disabled: true } : {})}
+                onChange={(event) =>
+                  update({ scheduleHours: event.currentTarget.checked })
+                }
+              />
+
+              {values.scheduleHours && (
+                <s-stack direction="block" gap="small-200">
+                  <s-grid gridTemplateColumns="1fr 1fr" gap="base">
+                    <s-select
+                      label="From"
+                      name="scheduleStart"
+                      value={values.scheduleStart}
+                      {...(disabled ? { disabled: true } : {})}
+                      onChange={(event) =>
+                        update({ scheduleStart: event.currentTarget.value })
+                      }
+                    >
+                      {SCHEDULE_TIME_OPTIONS.map((time) => (
+                        <s-option key={time} value={time}>
+                          {formatScheduleTime(time)}
+                        </s-option>
+                      ))}
+                    </s-select>
+                    <s-select
+                      label="To"
+                      name="scheduleEnd"
+                      value={values.scheduleEnd}
+                      {...(errors.schedule && values.scheduleDays.length > 0
+                        ? { error: errors.schedule }
+                        : {})}
+                      {...(disabled ? { disabled: true } : {})}
+                      onChange={(event) =>
+                        update({ scheduleEnd: event.currentTarget.value })
+                      }
+                    >
+                      {SCHEDULE_TIME_OPTIONS.map((time) => (
+                        <s-option key={time} value={time}>
+                          {formatScheduleTime(time)}
+                        </s-option>
+                      ))}
+                    </s-select>
+                  </s-grid>
+                  <s-text color="subdued">
+                    {values.scheduleStart > values.scheduleEnd
+                      ? "These hours run past midnight. The hours after midnight count as part of the day they started, so Saturday night still runs early on Sunday."
+                      : "The discount starts at the From time and stops at the To time."}
+                  </s-text>
+                </s-stack>
               )}
             </s-stack>
           </s-section>

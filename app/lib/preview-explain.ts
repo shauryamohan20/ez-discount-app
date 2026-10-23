@@ -8,7 +8,7 @@
  * config is built with the same serializers the app saves with.
  */
 import { previewBxgy, previewBxgyRules } from "./bxgy-form";
-import type { DiscountFormValues } from "./discount-form";
+import { validateSchedule, type DiscountFormValues } from "./discount-form";
 import {
   formatCalendarDate,
   formatMoney,
@@ -27,6 +27,7 @@ import {
   ALL_PRODUCTS,
   CUSTOMER_ELIGIBILITY_LABELS,
   describeOrderReward,
+  describeSchedule,
   describeSelection,
   describeTierRange,
   discountClassesFor,
@@ -36,6 +37,7 @@ import {
   sortTiers,
   type AppliesTo,
   type OrderTier,
+  type Schedule,
   type ShopifyDiscountClass,
   type Tier,
 } from "./tiers";
@@ -47,7 +49,22 @@ export type PreviewSetup = {
   lines: DemoLine[];
   /** Rows left out because they are not filled in correctly yet. */
   skippedRows: number;
+  /** The days and hours it runs, as the preview config has them. */
+  schedule: Schedule | null;
 };
+
+/**
+ * The days and hours for the preview. A form with no day ticked runs on no
+ * day, which an empty list of days says to the Function.
+ */
+export function previewSchedule(values: DiscountFormValues): Schedule | null {
+  const schedule = validateSchedule(values);
+  if (schedule.ok) return schedule.value;
+
+  return values.scheduleDays.length === 0
+    ? { days: [], startTime: null, endTime: null }
+    : null;
+}
 
 function parseAmount(raw: string): number | null {
   const trimmed = raw.trim();
@@ -175,6 +192,7 @@ function previewAppliesTo(values: DiscountFormValues): AppliesTo {
  */
 export function buildPreview(values: DiscountFormValues): PreviewSetup {
   const eligibility = values.customerEligibility;
+  const schedule = previewSchedule(values);
 
   if (values.discountType === "order_threshold") {
     const { tiers, skippedRows } = previewOrderTiers(values);
@@ -187,11 +205,13 @@ export function buildPreview(values: DiscountFormValues): PreviewSetup {
           ALL_PRODUCTS,
           eligibility,
           previewMaxDiscountAmount(values),
+          schedule,
         ),
       ),
       discountClasses: discountClassesFor("order_threshold", tiers),
       lines: genericCart(),
       skippedRows,
+      schedule,
     };
   }
 
@@ -204,10 +224,13 @@ export function buildPreview(values: DiscountFormValues): PreviewSetup {
     };
 
     return {
-      config: JSON.parse(serializeBuyXGetYConfig(withStandIns, eligibility)),
+      config: JSON.parse(
+        serializeBuyXGetYConfig(withStandIns, eligibility, schedule),
+      ),
       discountClasses: discountClassesFor("buy_x_get_y", []),
       lines: buyXGetYCart(values, rules),
       skippedRows: 0,
+      schedule,
     };
   }
 
@@ -220,11 +243,14 @@ export function buildPreview(values: DiscountFormValues): PreviewSetup {
         tiers,
         previewAppliesTo(values),
         eligibility,
+        null,
+        schedule,
       ),
     ),
     discountClasses: discountClassesFor("quantity_tiers", []),
     lines: quantityTierCart(values),
     skippedRows,
+    schedule,
   };
 }
 
@@ -282,6 +308,27 @@ export function explainCommonOptions(values: DiscountFormValues): string[] {
       end
         ? `Runs from ${formatCalendarDate(start)} to the end of ${formatCalendarDate(end)}.`
         : `Starts ${formatCalendarDate(start)} and has no end date.`,
+    );
+  }
+
+  const schedule = previewSchedule(values);
+  if (!schedule) {
+    lines.push("Runs every day, at any time.");
+  } else if (schedule.days.length === 0) {
+    lines.push(
+      "No day is ticked, so the discount never runs. Tick at least one day.",
+    );
+  } else {
+    const overnight =
+      schedule.startTime !== null &&
+      schedule.endTime !== null &&
+      schedule.startTime > schedule.endTime;
+    lines.push(
+      `Runs ${describeSchedule(schedule).replace(/^Every day/, "every day")}, in your store's time zone.${
+        overnight
+          ? " The hours after midnight count as part of the day they started."
+          : ""
+      }`,
     );
   }
 
@@ -597,6 +644,8 @@ export function cartLineNotes(
   result: PreviewResult,
   shopperQualifies: boolean,
   currencyCode: string,
+  /** False when the demo day and time are outside the schedule. */
+  running = true,
 ): Map<string, LineNote> {
   const notes = new Map<string, LineNote>();
   const money = (amount: number) => formatMoney(amount, currencyCode);
@@ -674,6 +723,11 @@ export function cartLineNotes(
         label: `${readableMessage(result.orderMessage, "Order discount")} applied`,
         amount: share,
       });
+      continue;
+    }
+
+    if (!running) {
+      notes.set(line.id, notApplied("Outside the discount's days and hours"));
       continue;
     }
 

@@ -18,6 +18,7 @@ import {
 import {
   isCustomerEligible,
   isPercentage,
+  isWithinSchedule,
   readConfig,
   type CustomerEligibility,
 } from "./shared";
@@ -30,7 +31,8 @@ import {
  * appliesTo. Version 4 added customerEligibility. Version 5 added type.
  * Version 6 added the buy_x_get_y type, whose settings live in buy_x_get_y.ts.
  * Version 7 added freeShipping to order thresholds, and version 8 a cap on
- * the amount taken off the order (both in order_threshold.ts).
+ * the amount taken off the order (both in order_threshold.ts). Version 9
+ * added schedule, the days and hours a discount runs (in shared.ts).
  *
  * Every added field is optional here, so a config written by any earlier
  * version of the app still behaves the way it did then. In particular a
@@ -57,6 +59,7 @@ type TierConfig = {
   appliesTo?: AppliesTo | null;
   customerEligibility?: CustomerEligibility | null;
   maxDiscountAmount?: unknown;
+  schedule?: unknown;
 };
 
 type Line = CartInput["cart"]["lines"][number];
@@ -303,6 +306,8 @@ export function cartLinesDiscountsGenerateRun(
   ) {
     return NOTHING;
   }
+
+  if (!isWithinSchedule(config.schedule, input.shop.localTime)) return NOTHING;
 
   return { operations: runForType(input, config) };
 }

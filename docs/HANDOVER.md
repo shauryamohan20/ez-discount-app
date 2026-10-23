@@ -117,6 +117,17 @@ own tab in the app:
   previous order. Evaluated in the Function. An anonymous cart cannot satisfy
   any rule except "everyone".
 - Start date and optional end date, in the shop's time zone.
+- Days and hours (config `schedule`): the days of the week and optional daily
+  hours a discount runs, in the store's time zone, in 30 minute steps. Hours
+  that cross midnight belong to the day they start (Saturday 22:00 to 06:00
+  runs at 02:00 on Sunday). The Function reads the store clock from
+  `shop.localTime` (`date`, plus `timeAfter` against the `$scheduleStart` and
+  `$scheduleEnd` input variables, written to `input-variables` as
+  `HH:MM:00`); the rule is `isWithinSchedule` in `src/shared.ts`, which the
+  demo cart imports too. An unreadable schedule switches the discount off.
+  Shopify works discounts out when the cart is calculated, so a cart left
+  untouched past the end time keeps its discount until it changes; checkout
+  recalculates.
 - Combination: never stacks with its own class; a checkbox for the other class
   (order for product kinds, product for order); a checkbox for shipping.
 - List, create, edit, publish, move to draft, delete (with confirmation).
@@ -198,7 +209,7 @@ own tab in the app:
 
 Namespace `$app:tiered`, both of type `json`, written in the same mutation.
 
-`config`, version 8. Older versions still load and behave as they did; the app
+`config`, version 9. Older versions still load and behave as they did; the app
 refuses to edit a version newer than it knows.
 
 ```json
@@ -229,15 +240,19 @@ refuses to edit a version newer than it knows.
 `draft`, always written on save: `{"isDraft":false}`, or
 `{"isDraft":true,"startsAt":"<ISO>","endsAt":"<ISO>"|null}` for a draft.
 
-`input-variables`, always written with all three keys:
+`input-variables`, always written with all five keys:
 
 ```json
-{"collectionIds":[],"buyCollectionIds":[],"getCollectionIds":[]}
+{"collectionIds":[],"buyCollectionIds":[],"getCollectionIds":[],
+ "scheduleStart":"22:00:00","scheduleEnd":"06:00:00"}
 ```
+
+Every fixture includes `shop.localTime`; the older ones use a neutral Monday
+noon so their results are unchanged.
 
 Version history: 1 tiers only; 2 maxQuantity and maxDiscountedUnits; 3
 appliesTo; 4 customerEligibility; 5 type; 6 buy_x_get_y; 7 freeShipping on
-order thresholds; 8 maxDiscountAmount on order thresholds.
+order thresholds; 8 maxDiscountAmount on order thresholds; 9 schedule on every kind.
 
 ### 5.3 The app
 
@@ -432,7 +447,7 @@ cd C:\Users\mohan\Desktop\ez-discount-app\ez-discount-app && pnpm run lint
 cd C:\Users\mohan\Desktop\ez-discount-app\ez-discount-app && pnpm run build
 ```
 
-Function tests, 104 fixtures, when the CLI works:
+Function tests, 119 fixtures, when the CLI works:
 
 ```bash
 cd C:\Users\mohan\Desktop\ez-discount-app\ez-discount-app\extensions\tiered-discount && pnpm test -- --run

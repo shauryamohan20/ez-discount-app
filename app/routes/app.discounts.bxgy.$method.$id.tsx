@@ -28,6 +28,7 @@ import {
   validateDiscountForm,
   type DiscountFormErrors,
   type DiscountFormValues,
+  scheduleToFormValues,
 } from "../lib/discount-form";
 import { shopIsoToCalendarDate, todayInShop } from "../lib/shop-time";
 import { discountTab, toDiscountGid } from "../lib/discount-id";
@@ -89,6 +90,7 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
     combinesWithShipping: discount.combinesWithShipping,
     combinesWithOtherDiscounts: discount.combinesWithOtherDiscounts,
     customerEligibility: config.customerEligibility,
+    ...scheduleToFormValues(config.schedule),
     bxgy: config.bxgy
       ? bxgyToFormValues(
           config.bxgy,

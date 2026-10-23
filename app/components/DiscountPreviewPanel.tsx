@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { DiscountFormValues } from "../lib/discount-form";
 import {
   DEMO_SHOPPER_LABELS,
+  demoClock,
   formatMoney,
   isDemoShopper,
   runPreview,
@@ -18,7 +19,14 @@ import {
   explainQuantityTiers,
 } from "../lib/preview-explain";
 import { DemoCart } from "./DemoCart";
-import type { CustomerEligibility } from "../lib/tiers";
+import { isWithinSchedule } from "../../extensions/tiered-discount/src/shared";
+import {
+  DAY_FULL_NAMES,
+  SCHEDULE_TIME_OPTIONS,
+  WEEK_ORDER,
+  formatScheduleTime,
+  type CustomerEligibility,
+} from "../lib/tiers";
 
 type Props = {
   values: DiscountFormValues;
@@ -57,11 +65,32 @@ export function DiscountPreviewPanel({ values, currencyCode }: Props) {
   // from the form, so picking other products keeps the changes that still fit.
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [shopper, setShopper] = useState<DemoShopper>("guest");
+  // The demo day (0 is Sunday) and time the Function sees. Null follows the
+  // schedule: its first day and its start time, so the discount shows as
+  // running until the merchant picks another moment.
+  const [demoDay, setDemoDay] = useState<number | null>(null);
+  const [demoTime, setDemoTime] = useState<string | null>(null);
   const [inBrowser, setInBrowser] = useState(false);
 
   useEffect(() => setInBrowser(true), []);
 
   const preview = useMemo(() => buildPreview(values), [values]);
+  const schedule = preview.schedule;
+  const day =
+    demoDay ??
+    WEEK_ORDER.find((weekday) => schedule?.days.includes(weekday) ?? true) ??
+    1;
+  const time = demoTime ?? schedule?.startTime ?? "12:00";
+  const clock = useMemo(
+    () =>
+      demoClock(
+        day,
+        time,
+        schedule?.startTime ?? null,
+        schedule?.endTime ?? null,
+      ),
+    [day, time, schedule],
+  );
   const lines = useMemo<DemoLine[]>(
     () =>
       preview.lines.map((line) => ({
@@ -80,17 +109,20 @@ export function DiscountPreviewPanel({ values, currencyCode }: Props) {
         discountClasses: preview.discountClasses,
         lines,
         shopper,
+        clock,
       });
     } catch (error) {
       console.error("Live preview failed", error);
       return null;
     }
-  }, [inBrowser, preview, lines, shopper]);
+  }, [inBrowser, preview, lines, shopper, clock]);
 
   if (!result) return null;
 
   const money = (amount: number) => formatMoney(amount, currencyCode);
   const qualifies = shopperQualifies(shopper, values.customerEligibility);
+  // The Function's own rule, so the preview cannot disagree with checkout.
+  const running = isWithinSchedule(schedule, clock);
 
   const changeQuantity = (line: DemoLine, delta: number) => {
     setQuantities((current) => ({
@@ -107,6 +139,11 @@ export function DiscountPreviewPanel({ values, currencyCode }: Props) {
         : explainQuantityTiers(values, lines);
 
   const explanations = [
+    ...(running
+      ? []
+      : [
+          `On ${DAY_FULL_NAMES[day]} at ${formatScheduleTime(time)} the discount is outside its days and hours, so nothing applies. Change the demo day or time to see it.`,
+        ]),
     ...(qualifies
       ? []
       : [
@@ -155,6 +192,33 @@ export function DiscountPreviewPanel({ values, currencyCode }: Props) {
                   )}
                 </s-select>
 
+                <s-grid gridTemplateColumns="1fr 1fr" gap="base">
+                  <s-select
+                    label="Day"
+                    value={String(day)}
+                    onChange={(event) =>
+                      setDemoDay(Number(event.currentTarget.value))
+                    }
+                  >
+                    {WEEK_ORDER.map((weekday) => (
+                      <s-option key={weekday} value={String(weekday)}>
+                        {DAY_FULL_NAMES[weekday]}
+                      </s-option>
+                    ))}
+                  </s-select>
+                  <s-select
+                    label="Time"
+                    value={time}
+                    onChange={(event) => setDemoTime(event.currentTarget.value)}
+                  >
+                    {SCHEDULE_TIME_OPTIONS.map((option) => (
+                      <s-option key={option} value={option}>
+                        {formatScheduleTime(option)}
+                      </s-option>
+                    ))}
+                  </s-select>
+                </s-grid>
+
                 <s-stack direction="inline">
                   <s-button
                     variant="secondary"
@@ -191,6 +255,7 @@ export function DiscountPreviewPanel({ values, currencyCode }: Props) {
                   result,
                   qualifies,
                   currencyCode,
+                  running,
                 )}
                 money={money}
                 onQuantity={changeQuantity}

@@ -2,7 +2,16 @@ query CartInput(
   $collectionIds: [ID!] = []
   $buyCollectionIds: [ID!] = []
   $getCollectionIds: [ID!] = []
+  $scheduleStart: TimeWithoutTimezone = "00:00:00"
+  $scheduleEnd: TimeWithoutTimezone = "00:00:00"
 ) {
+  shop {
+    localTime {
+      date
+      afterScheduleStart: timeAfter(time: $scheduleStart)
+      afterScheduleEnd: timeAfter(time: $scheduleEnd)
+    }
+  }
   cart {
     buyerIdentity {
       isAuthenticated

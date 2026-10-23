@@ -9,7 +9,9 @@ import {
 } from "./bxgy-form";
 import { isCalendarDate } from "./shop-time";
 import {
+  ALL_DAYS,
   ALL_PRODUCTS,
+  isScheduleTime,
   MAX_TIERS,
   isCustomerEligibility,
   sortOrderTiers,
@@ -21,6 +23,7 @@ import {
   type CustomerEligibility,
   type DiscountType,
   type OrderTier,
+  type Schedule,
   type Tier,
 } from "./tiers";
 
@@ -82,6 +85,13 @@ export type DiscountFormValues = {
   orderTiers: OrderTierRowValues[];
   /** Order thresholds only: the most taken off, empty for no cap. */
   maxDiscountAmount: string;
+  /** The days it runs, 0 (Sunday) to 6. Every day by default. */
+  scheduleDays: number[];
+  /** Whether it runs only between the two times below. */
+  scheduleHours: boolean;
+  /** "HH:MM", in the store's time zone. */
+  scheduleStart: string;
+  scheduleEnd: string;
   /** Used only for a Buy X Get Y discount. */
   bxgy: BxgyFormValues;
 };
@@ -104,6 +114,7 @@ export type DiscountFormErrors = {
   rows?: Record<string, TierRowErrors>;
   orderRows?: Record<string, OrderTierRowErrors>;
   maxDiscountAmount?: string;
+  schedule?: string;
   bxgy?: BxgyFormErrors;
 };
 
@@ -125,6 +136,8 @@ export type ValidatedDiscount = {
   orderTiers: OrderTier[];
   /** Order thresholds only, in the shop's currency. Null means no cap. */
   maxDiscountAmount: number | null;
+  /** Null means it runs at any time. */
+  schedule: Schedule | null;
   bxgy: BuyXGetY | null;
 };
 
@@ -196,6 +209,10 @@ export function blankDiscountForm(
     ],
     orderTiers: [{ minSubtotal: "100", percentage: "10", freeShipping: false }],
     maxDiscountAmount: "",
+    scheduleDays: [...ALL_DAYS],
+    scheduleHours: false,
+    scheduleStart: "22:00",
+    scheduleEnd: "06:00",
     bxgy: blankBxgyForm(),
   };
 }
@@ -211,7 +228,8 @@ export function hasErrors(errors: DiscountFormErrors): boolean {
     errors.endDate ||
     errors.appliesTo ||
     errors.tiers ||
-    errors.maxDiscountAmount
+    errors.maxDiscountAmount ||
+    errors.schedule
   ) {
     return true;
   }
@@ -295,6 +313,10 @@ export function validateDiscountForm(
     errors.endDate = "The end date must be after the start date.";
   }
 
+  // Days and hours apply to every kind of discount.
+  const schedule = validateSchedule(values);
+  if (!schedule.ok) errors.schedule = schedule.error;
+
   if (values.discountType === "buy_x_get_y") {
     const bxgy = validateBxgy(values.bxgy, values.customerEligibility);
     if (!bxgy.ok) errors.bxgy = bxgy.errors;
@@ -320,6 +342,7 @@ export function validateDiscountForm(
         tiers: [],
         orderTiers: [],
         maxDiscountAmount: null,
+        schedule: schedule.ok ? schedule.value : null,
         bxgy: bxgy.value,
       },
     };
@@ -448,6 +471,7 @@ export function validateDiscountForm(
         tiers: [],
         orderTiers: sortOrderTiers(parsedOrderTiers.map((row) => row.tier)),
         maxDiscountAmount,
+        schedule: schedule.ok ? schedule.value : null,
         bxgy: null,
       },
     };
@@ -586,6 +610,7 @@ export function validateDiscountForm(
       tiers: sortTiers(parsed.map((row) => row.tier)),
       orderTiers: [],
       maxDiscountAmount: null,
+      schedule: schedule.ok ? schedule.value : null,
       bxgy: null,
     },
   };
@@ -643,6 +668,10 @@ export function discountFormValuesFromFormData(
     tiers,
     orderTiers: orderTierRowsFromFormData(formData),
     maxDiscountAmount: String(formData.get("maxDiscountAmount") ?? ""),
+    scheduleDays: scheduleDaysFromFormData(formData),
+    scheduleHours: formData.get("scheduleHours") === "true",
+    scheduleStart: String(formData.get("scheduleStart") ?? ""),
+    scheduleEnd: String(formData.get("scheduleEnd") ?? ""),
     bxgy: bxgyFromFormData(formData.get("bxgy")),
   };
 }
@@ -674,8 +703,87 @@ export function formValuesToSubmission(
     tiers: JSON.stringify(values.tiers),
     orderTiers: JSON.stringify(values.orderTiers),
     maxDiscountAmount: values.maxDiscountAmount,
+    scheduleDays: JSON.stringify(values.scheduleDays),
+    scheduleHours: String(values.scheduleHours),
+    scheduleStart: values.scheduleStart,
+    scheduleEnd: values.scheduleEnd,
     bxgy: JSON.stringify(values.bxgy),
   };
+}
+
+/**
+ * The form's days and hours as the schedule the app saves: null when it is
+ * every day with no hours, which is the same as no schedule at all.
+ */
+export function validateSchedule(
+  values: Pick<
+    DiscountFormValues,
+    "scheduleDays" | "scheduleHours" | "scheduleStart" | "scheduleEnd"
+  >,
+): { ok: true; value: Schedule | null } | { ok: false; error: string } {
+  const days = [...new Set(values.scheduleDays)]
+    .filter((day) => Number.isInteger(day) && day >= 0 && day <= 6)
+    .sort((a, b) => a - b);
+
+  if (days.length === 0) {
+    return { ok: false, error: "Choose at least one day." };
+  }
+
+  if (!values.scheduleHours) {
+    return {
+      ok: true,
+      value:
+        days.length === 7 ? null : { days, startTime: null, endTime: null },
+    };
+  }
+
+  if (
+    !isScheduleTime(values.scheduleStart) ||
+    !isScheduleTime(values.scheduleEnd)
+  ) {
+    return { ok: false, error: "Choose a start and an end time." };
+  }
+
+  if (values.scheduleStart === values.scheduleEnd) {
+    return {
+      ok: false,
+      error:
+        "Use different start and end times, or turn off the hours to run all day.",
+    };
+  }
+
+  return {
+    ok: true,
+    value: {
+      days,
+      startTime: values.scheduleStart,
+      endTime: values.scheduleEnd,
+    },
+  };
+}
+
+/** A saved schedule back into the form's fields. */
+export function scheduleToFormValues(
+  schedule: Schedule | null,
+): Pick<
+  DiscountFormValues,
+  "scheduleDays" | "scheduleHours" | "scheduleStart" | "scheduleEnd"
+> {
+  return {
+    scheduleDays: schedule ? [...schedule.days] : [...ALL_DAYS],
+    scheduleHours: Boolean(schedule?.startTime && schedule.endTime),
+    scheduleStart: schedule?.startTime ?? "22:00",
+    scheduleEnd: schedule?.endTime ?? "06:00",
+  };
+}
+
+function scheduleDaysFromFormData(formData: FormData): number[] {
+  try {
+    const parsed = JSON.parse(String(formData.get("scheduleDays") ?? "[]"));
+    return Array.isArray(parsed) ? parsed.map(Number) : [];
+  } catch {
+    return [];
+  }
 }
 
 function orderTierRowsFromFormData(formData: FormData): OrderTierRowValues[] {

@@ -30,6 +30,7 @@ import {
   validateDiscountForm,
   type DiscountFormErrors,
   type DiscountFormValues,
+  scheduleToFormValues,
 } from "../lib/discount-form";
 import { shopIsoToCalendarDate, todayInShop } from "../lib/shop-time";
 import {
@@ -96,6 +97,7 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
     discountType: "quantity_tiers",
     orderTiers: [],
     maxDiscountAmount: "",
+    ...scheduleToFormValues(config.status === "ok" ? config.schedule : null),
     combinesWithOtherDiscounts: discount.combinesWithOtherDiscounts,
     title: discount.title,
     startDate:

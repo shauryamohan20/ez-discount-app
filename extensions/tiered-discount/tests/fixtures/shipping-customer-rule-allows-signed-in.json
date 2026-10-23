@@ -3,6 +3,13 @@
     "export": "cart-delivery-options-discounts-generate-run",
     "target": "cart.delivery-options.discounts.generate.run",
     "input": {
+      "shop": {
+        "localTime": {
+          "date": "2026-10-19",
+          "afterScheduleStart": true,
+          "afterScheduleEnd": true
+        }
+      },
       "cart": {
         "buyerIdentity": {
           "isAuthenticated": true,

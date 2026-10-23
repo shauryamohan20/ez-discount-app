@@ -35,6 +35,8 @@ export const DISCOUNT_FUNCTION_HANDLE = "tiered-discount";
  *    they give free shipping.
  * 8: order thresholds gain maxDiscountAmount, a cap on the amount taken off
  *    the order, in the shop's currency. Absent or null means no cap.
+ * 9: every kind gains schedule, the days of the week and daily hours it runs
+ *    in the store's time zone. Absent or null means always.
  *
  * Each added field is optional, so a config written by an earlier version
  * keeps the behaviour it had then and is rewritten at the current version the
@@ -42,7 +44,7 @@ export const DISCOUNT_FUNCTION_HANDLE = "tiered-discount";
  * Discounts saved by a newer version are reported as unsupported rather than
  * edited with the wrong assumptions.
  */
-export const TIER_CONFIG_VERSION = 8;
+export const TIER_CONFIG_VERSION = 9;
 
 export const MAX_TIERS = 10;
 
@@ -191,11 +193,79 @@ export function discountClassesFor(
     : ["ORDER"];
 }
 
+/**
+ * When a discount runs, in the store's time zone. Days are 0 (Sunday) to 6.
+ * Times are "HH:MM", both or neither; neither means all day. A start later
+ * than the end runs past midnight, and the hours after midnight belong to the
+ * day it started. The Function's copy of these rules is isWithinSchedule in
+ * extensions/tiered-discount/src/shared.ts.
+ */
+export type Schedule = {
+  days: number[];
+  startTime: string | null;
+  endTime: string | null;
+};
+
+export const ALL_DAYS = [0, 1, 2, 3, 4, 5, 6];
+
+const SCHEDULE_TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+export function isScheduleTime(value: unknown): value is string {
+  return typeof value === "string" && SCHEDULE_TIME.test(value);
+}
+
+/** Absent means the config predates schedules, so: always. */
+function normalizeSchedule(
+  value: unknown,
+): { ok: true; schedule: Schedule | null } | { ok: false } {
+  if (value === undefined || value === null)
+    return { ok: true, schedule: null };
+  if (!isRecord(value)) return { ok: false };
+
+  const days = value.days ?? ALL_DAYS;
+  if (
+    !Array.isArray(days) ||
+    days.length === 0 ||
+    !days.every(
+      (day) =>
+        typeof day === "number" &&
+        Number.isInteger(day) &&
+        day >= 0 &&
+        day <= 6,
+    )
+  ) {
+    return { ok: false };
+  }
+
+  const startTime = value.startTime ?? null;
+  const endTime = value.endTime ?? null;
+  if ((startTime === null) !== (endTime === null)) return { ok: false };
+  if (
+    startTime !== null &&
+    (!isScheduleTime(startTime) ||
+      !isScheduleTime(endTime) ||
+      startTime === endTime)
+  ) {
+    return { ok: false };
+  }
+
+  return {
+    ok: true,
+    schedule: {
+      days: [...new Set(days as number[])].sort((a, b) => a - b),
+      startTime: startTime as string | null,
+      endTime: endTime as string | null,
+    },
+  };
+}
+
 type ConfigCommon = {
   status: "ok";
   version: number;
   appliesTo: AppliesTo;
   customerEligibility: CustomerEligibility;
+  /** Null means the discount runs at any time. */
+  schedule: Schedule | null;
 };
 
 /**
@@ -471,6 +541,14 @@ export function parseTierConfig(jsonValue: unknown): TierConfig {
     );
   }
 
+  const parsedSchedule = normalizeSchedule(jsonValue.schedule);
+  if (!parsedSchedule.ok) {
+    return unsupported(
+      "The saved days and hours are not in a format this version of the app can read.",
+    );
+  }
+  const schedule = parsedSchedule.schedule;
+
   if (type === "buy_x_get_y") {
     const bxgy = normalizeBuyXGetY(jsonValue);
 
@@ -487,6 +565,7 @@ export function parseTierConfig(jsonValue: unknown): TierConfig {
       bxgy,
       appliesTo: ALL_PRODUCTS,
       customerEligibility,
+      schedule,
     };
   }
 
@@ -543,6 +622,7 @@ export function parseTierConfig(jsonValue: unknown): TierConfig {
       maxDiscountAmount,
       appliesTo,
       customerEligibility,
+      schedule,
     };
   }
 
@@ -553,6 +633,7 @@ export function parseTierConfig(jsonValue: unknown): TierConfig {
     tiers: sortTiers(normalized),
     appliesTo,
     customerEligibility,
+    schedule,
   };
 }
 
@@ -563,6 +644,7 @@ export function serializeTierConfig(
   customerEligibility: CustomerEligibility,
   /** Order thresholds only: the most the discount takes off, or null. */
   maxDiscountAmount: number | null = null,
+  schedule: Schedule | null = null,
 ): string {
   return JSON.stringify({
     version: TIER_CONFIG_VERSION,
@@ -574,6 +656,7 @@ export function serializeTierConfig(
     ...(type === "order_threshold" ? { maxDiscountAmount } : {}),
     appliesTo,
     customerEligibility,
+    schedule,
   });
 }
 
@@ -581,6 +664,7 @@ export function serializeTierConfig(
 export function serializeBuyXGetYConfig(
   bxgy: BuyXGetY,
   customerEligibility: CustomerEligibility,
+  schedule: Schedule | null = null,
 ): string {
   return JSON.stringify({
     version: TIER_CONFIG_VERSION,
@@ -605,6 +689,7 @@ export function serializeBuyXGetYConfig(
     maxApplicationsPerOrder: bxgy.maxApplicationsPerOrder,
     discountedUnits: "cheapest",
     customerEligibility,
+    schedule,
   });
 }
 
@@ -648,12 +733,62 @@ export function collectionVariablesForBuyXGetY(
  */
 export function serializeInputVariables(
   variables: Partial<CollectionVariables>,
+  schedule: Schedule | null = null,
 ): string {
   return JSON.stringify({
     collectionIds: variables.collectionIds ?? [],
     buyCollectionIds: variables.buyCollectionIds ?? [],
     getCollectionIds: variables.getCollectionIds ?? [],
+    // The Function compares the store's clock with these, as input query
+    // variables of type TimeWithoutTimezone.
+    scheduleStart: `${schedule?.startTime ?? "00:00"}:00`,
+    scheduleEnd: `${schedule?.endTime ?? "00:00"}:00`,
   });
+}
+
+const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+/** Monday first, the way a week reads in the form. */
+export const WEEK_ORDER = [1, 2, 3, 4, 5, 6, 0];
+
+/** "22:00" as "10:00 PM". */
+export function formatScheduleTime(time: string): string {
+  const [hours, minutes] = time.split(":").map(Number);
+  const suffix = hours < 12 ? "AM" : "PM";
+  const twelve = hours % 12 === 0 ? 12 : hours % 12;
+  return `${twelve}:${String(minutes).padStart(2, "0")} ${suffix}`;
+}
+
+/** "Every day", "Mon to Fri", "Fri and Sat", "Mon, Wed and Fri". */
+export function describeDays(days: number[]): string {
+  const ordered = WEEK_ORDER.filter((day) => days.includes(day));
+  if (ordered.length === 7) return "Every day";
+
+  // A run of consecutive days, Monday first, reads as a range.
+  const positions = ordered.map((day) => WEEK_ORDER.indexOf(day));
+  const consecutive = positions.every(
+    (position, index) => index === 0 || position === positions[index - 1] + 1,
+  );
+  if (consecutive && ordered.length >= 3) {
+    return `${DAY_NAMES[ordered[0]]} to ${DAY_NAMES[ordered[ordered.length - 1]]}`;
+  }
+
+  const names = ordered.map((day) => DAY_NAMES[day]);
+  return names.length === 1
+    ? names[0]
+    : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+}
+
+/** "Fri and Sat, 10:00 PM to 6:00 AM", "Every day, all day". */
+export function describeSchedule(schedule: Schedule | null): string {
+  if (!schedule) return "Any day, any time";
+
+  const hours =
+    schedule.startTime && schedule.endTime
+      ? `${formatScheduleTime(schedule.startTime)} to ${formatScheduleTime(schedule.endTime)}`
+      : "all day";
+
+  return `${describeDays(schedule.days)}, ${hours}`;
 }
 
 /** "free", "at 50% off". */
@@ -808,3 +943,19 @@ export function summarizeOrderTiers(tiers: OrderTier[]): string {
 export function formatThreshold(amount: number): string {
   return Number.isInteger(amount) ? String(amount) : amount.toFixed(2);
 }
+
+export const DAY_FULL_NAMES = [
+  "Sunday",
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+];
+
+/** Every half hour of the day, "00:00" to "23:30", for the time pickers. */
+export const SCHEDULE_TIME_OPTIONS = Array.from({ length: 48 }, (_, index) => {
+  const hours = String(Math.floor(index / 2)).padStart(2, "0");
+  return `${hours}:${index % 2 === 0 ? "00" : "30"}`;
+});

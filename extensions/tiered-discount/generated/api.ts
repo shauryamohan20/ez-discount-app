@@ -3472,16 +3472,21 @@ export enum WeightUnit {
   Pounds = 'POUNDS'
 }
 
-export type DeliveryInputVariables = Exact<{ [key: string]: never; }>;
+export type DeliveryInputVariables = Exact<{
+  scheduleStart?: InputMaybe<Scalars['TimeWithoutTimezone']['input']>;
+  scheduleEnd?: InputMaybe<Scalars['TimeWithoutTimezone']['input']>;
+}>;
 
 
-export type DeliveryInput = { __typename?: 'Input', presentmentCurrencyRate: string, cart: { __typename?: 'Cart', buyerIdentity?: { __typename?: 'BuyerIdentity', isAuthenticated: boolean, customer?: { __typename?: 'Customer', numberOfOrders: number } | null } | null, cost: { __typename?: 'CartCost', subtotalAmount: { __typename?: 'MoneyV2', amount: string } }, deliveryGroups: Array<{ __typename?: 'CartDeliveryGroup', deliveryOptions: Array<{ __typename?: 'CartDeliveryOption', handle: string }> }> }, discount: { __typename?: 'Discount', discountClasses: Array<DiscountClass>, metafield?: { __typename?: 'Metafield', jsonValue: unknown } | null } };
+export type DeliveryInput = { __typename?: 'Input', presentmentCurrencyRate: string, shop: { __typename?: 'Shop', localTime: { __typename?: 'LocalTime', date: string, afterScheduleStart: boolean, afterScheduleEnd: boolean } }, cart: { __typename?: 'Cart', buyerIdentity?: { __typename?: 'BuyerIdentity', isAuthenticated: boolean, customer?: { __typename?: 'Customer', numberOfOrders: number } | null } | null, cost: { __typename?: 'CartCost', subtotalAmount: { __typename?: 'MoneyV2', amount: string } }, deliveryGroups: Array<{ __typename?: 'CartDeliveryGroup', deliveryOptions: Array<{ __typename?: 'CartDeliveryOption', handle: string }> }> }, discount: { __typename?: 'Discount', discountClasses: Array<DiscountClass>, metafield?: { __typename?: 'Metafield', jsonValue: unknown } | null } };
 
 export type CartInputVariables = Exact<{
   collectionIds?: InputMaybe<Array<Scalars['ID']['input']> | Scalars['ID']['input']>;
   buyCollectionIds?: InputMaybe<Array<Scalars['ID']['input']> | Scalars['ID']['input']>;
   getCollectionIds?: InputMaybe<Array<Scalars['ID']['input']> | Scalars['ID']['input']>;
+  scheduleStart?: InputMaybe<Scalars['TimeWithoutTimezone']['input']>;
+  scheduleEnd?: InputMaybe<Scalars['TimeWithoutTimezone']['input']>;
 }>;
 
 
-export type CartInput = { __typename?: 'Input', presentmentCurrencyRate: string, cart: { __typename?: 'Cart', buyerIdentity?: { __typename?: 'BuyerIdentity', isAuthenticated: boolean, customer?: { __typename?: 'Customer', numberOfOrders: number } | null } | null, cost: { __typename?: 'CartCost', subtotalAmount: { __typename?: 'MoneyV2', amount: string } }, lines: Array<{ __typename?: 'CartLine', id: string, quantity: number, cost: { __typename?: 'CartLineCost', amountPerQuantity: { __typename?: 'MoneyV2', amount: string } }, merchandise: { __typename: 'CustomProduct' } | { __typename: 'ProductVariant', id: string, product: { __typename?: 'Product', id: string, inSelectedCollection: boolean, inBuyCollection: boolean, inGetCollection: boolean } } }> }, discount: { __typename?: 'Discount', discountClasses: Array<DiscountClass>, metafield?: { __typename?: 'Metafield', jsonValue: unknown } | null } };
+export type CartInput = { __typename?: 'Input', presentmentCurrencyRate: string, shop: { __typename?: 'Shop', localTime: { __typename?: 'LocalTime', date: string, afterScheduleStart: boolean, afterScheduleEnd: boolean } }, cart: { __typename?: 'Cart', buyerIdentity?: { __typename?: 'BuyerIdentity', isAuthenticated: boolean, customer?: { __typename?: 'Customer', numberOfOrders: number } | null } | null, cost: { __typename?: 'CartCost', subtotalAmount: { __typename?: 'MoneyV2', amount: string } }, lines: Array<{ __typename?: 'CartLine', id: string, quantity: number, cost: { __typename?: 'CartLineCost', amountPerQuantity: { __typename?: 'MoneyV2', amount: string } }, merchandise: { __typename: 'CustomProduct' } | { __typename: 'ProductVariant', id: string, product: { __typename?: 'Product', id: string, inSelectedCollection: boolean, inBuyCollection: boolean, inGetCollection: boolean } } }> }, discount: { __typename?: 'Discount', discountClasses: Array<DiscountClass>, metafield?: { __typename?: 'Metafield', jsonValue: unknown } | null } };
