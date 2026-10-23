@@ -45,16 +45,20 @@ function DiscountKindTile({
       blockSize="100%"
       inlineSize="100%"
     >
-      <s-stack direction="block" gap="base">
-        <KindIcon kind={icon} />
-        <s-text type="strong">{title}</s-text>
-        <s-paragraph>{description}</s-paragraph>
+      {/* The button sits in its own row at the bottom, so the buttons line up
+          across tiles whatever the length of the descriptions above them. */}
+      <s-grid gridTemplateRows="1fr auto" gap="base" blockSize="100%">
+        <s-stack direction="block" gap="base">
+          <KindIcon kind={icon} />
+          <s-text type="strong">{title}</s-text>
+          <s-paragraph>{description}</s-paragraph>
+        </s-stack>
         <s-stack direction="inline">
           <s-button variant="primary" href={href}>
             {action}
           </s-button>
         </s-stack>
-      </s-stack>
+      </s-grid>
     </s-box>
   );
 }

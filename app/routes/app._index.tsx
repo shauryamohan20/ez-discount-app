@@ -105,12 +105,16 @@ function DiscountKindTile({
       blockSize="100%"
       inlineSize="100%"
     >
-      <s-stack direction="block" gap="small-200">
-        <KindIcon kind={icon} />
-        <s-text type="strong">{title}</s-text>
-        <s-text>{description}</s-text>
+      {/* The count sits in its own row at the bottom, so it lines up across
+          tiles whatever the length of the descriptions above it. */}
+      <s-grid gridTemplateRows="1fr auto" gap="base" blockSize="100%">
+        <s-stack direction="block" gap="small-200">
+          <KindIcon kind={icon} />
+          <s-text type="strong">{title}</s-text>
+          <s-text>{description}</s-text>
+        </s-stack>
         {status && <s-text color="subdued">{status}</s-text>}
-      </s-stack>
+      </s-grid>
     </s-clickable>
   );
 }
