@@ -139,7 +139,10 @@ export default function EditOrderDiscountPage() {
   } = useLoaderData<typeof loader>();
   const fetcher = useFetcher<typeof action>();
 
+  const initialValues = loadedValues;
   const [values, setValues] = useState<DiscountFormValues>(loadedValues);
+  // Leaving with changes asks first; see DiscountFormActions.
+  const dirty = JSON.stringify(values) !== JSON.stringify(initialValues);
   const [clientErrors, setClientErrors] = useState<DiscountFormErrors>({});
 
   const saving = fetcher.state !== "idle";
@@ -173,6 +176,11 @@ export default function EditOrderDiscountPage() {
         ended={ended}
         cancelHref="/app/discounts/order"
         onSave={save}
+        dirty={dirty}
+        onDiscard={() => {
+          setValues(initialValues);
+          setClientErrors({});
+        }}
       />
 
       {unsupportedReason && (

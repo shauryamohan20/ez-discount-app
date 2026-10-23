@@ -289,7 +289,15 @@ order thresholds.
   from `cartLineNotes` in `preview-explain.ts`: what was taken off, or why
   nothing was. A whole order discount is shared across lines by value.
 - `DiscountFormActions.tsx`: the page buttons every create and edit page
-  shares (Save or Publish, Save as draft, Cancel) and the draft banner.
+  shares (Save or Publish, Save as draft, Cancel) and the draft banner. It also
+  guards unsaved changes (`dirty`, the form compared with what was loaded):
+  React Router `useBlocker` stops in-app navigation and asks "Save this
+  discount as a draft before leaving?" (Save as draft, Leave without saving,
+  Keep editing); App Bridge's `ui-save-bar` shows while there are changes,
+  so Shopify asks before leaving to another part of the admin (its buttons
+  are always Save and Discard); `beforeunload` makes the browser warn on tab
+  close or reload (browsers do not allow custom text there). Not yet tested
+  in the admin: check for a double prompt when using the app menu.
 - `DiscountPreviewPanel.tsx`: the live preview beside the form.
   `TieredDiscountForm` lays the form and the panel out in an `s-grid` (equal
   halves, one column under 1100px of container width); the panel is sticky

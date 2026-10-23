@@ -58,9 +58,12 @@ export default function NewBuyXGetYPage() {
   const { today, currencyCode } = useLoaderData<typeof loader>();
   const fetcher = useFetcher<typeof action>();
 
-  const [values, setValues] = useState<DiscountFormValues>(() =>
+  const [initialValues] = useState<DiscountFormValues>(() =>
     blankDiscountForm(today, "automatic", "buy_x_get_y"),
   );
+  const [values, setValues] = useState<DiscountFormValues>(initialValues);
+  // Leaving with changes asks first; see DiscountFormActions.
+  const dirty = JSON.stringify(values) !== JSON.stringify(initialValues);
   const [clientErrors, setClientErrors] = useState<DiscountFormErrors>({});
 
   const saving = fetcher.state !== "idle";
@@ -93,6 +96,11 @@ export default function NewBuyXGetYPage() {
         savingAs={savingAsFrom(fetcher.formData)}
         cancelHref="/app/discounts/bxgy"
         onSave={save}
+        dirty={dirty}
+        onDiscard={() => {
+          setValues(initialValues);
+          setClientErrors({});
+        }}
       />
 
       {formError && (

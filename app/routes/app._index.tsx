@@ -101,6 +101,8 @@ function DiscountKindTile({
       borderRadius="base"
       padding="base"
       minBlockSize="160px"
+      // Fills its grid cell, so every tile in a row is the same height.
+      blockSize="100%"
       inlineSize="100%"
     >
       <s-stack direction="block" gap="small-200">
