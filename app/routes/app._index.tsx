@@ -77,25 +77,31 @@ function describeCounts(counts: { total: number; active: number } | undefined) {
 }
 
 type TileProps = {
+  /** The kind's own list. */
   href: string;
+  /** The kind's create page, so creating skips the "which kind" page. */
+  createHref: string;
   title: string;
   description: string;
   status: string;
   icon: DiscountKindIcon;
 };
 
-/** One kind of discount. The whole tile is the link to that kind's page. */
+/**
+ * One kind of discount, with buttons to create one of that kind straight
+ * away and to open its list. A plain card rather than one big link, because
+ * a button cannot sit inside a link.
+ */
 function DiscountKindTile({
   href,
+  createHref,
   title,
   description,
   status,
   icon,
 }: TileProps) {
   return (
-    <s-clickable
-      href={href}
-      accessibilityLabel={`Open ${title.toLowerCase()} discounts`}
+    <s-box
       background="base"
       border="base"
       borderRadius="base"
@@ -105,17 +111,34 @@ function DiscountKindTile({
       blockSize="100%"
       inlineSize="100%"
     >
-      {/* The count sits in its own row at the bottom, so it lines up across
-          tiles whatever the length of the descriptions above it. */}
+      {/* The count and buttons sit in their own row at the bottom, so they
+          line up across tiles whatever the length of the descriptions. */}
       <s-grid gridTemplateRows="1fr auto" gap="base" blockSize="100%">
         <s-stack direction="block" gap="small-200">
           <KindIcon kind={icon} />
           <s-text type="strong">{title}</s-text>
           <s-text>{description}</s-text>
         </s-stack>
-        {status && <s-text color="subdued">{status}</s-text>}
+        <s-stack direction="block" gap="small-200">
+          {status && <s-text color="subdued">{status}</s-text>}
+          <s-stack direction="inline" gap="small-200">
+            <s-button
+              variant="primary"
+              href={createHref}
+              accessibilityLabel={`Create a ${title.toLowerCase()} discount`}
+            >
+              Create discount
+            </s-button>
+            <s-button
+              href={href}
+              accessibilityLabel={`View ${title.toLowerCase()} discounts`}
+            >
+              View discounts
+            </s-button>
+          </s-stack>
+        </s-stack>
       </s-grid>
-    </s-clickable>
+    </s-box>
   );
 }
 
@@ -125,14 +148,6 @@ export default function HomePage() {
 
   return (
     <s-page heading={APP_NAME} inlineSize="large">
-      <s-button
-        slot="primary-action"
-        variant="primary"
-        href="/app/discounts/new"
-      >
-        Create discount
-      </s-button>
-
       {error && (
         <s-banner
           slot="supplemental-start"
@@ -152,6 +167,7 @@ export default function HomePage() {
             <s-grid-item>
               <DiscountKindTile
                 href="/app/discounts/quantity"
+                createHref="/app/discounts/quantity/new"
                 icon="quantity"
                 title="Quantity based"
                 description="Take more off the more items a customer buys, with quantity ranges, exact quantities and a cap on discounted units."
@@ -162,9 +178,10 @@ export default function HomePage() {
             <s-grid-item>
               <DiscountKindTile
                 href="/app/discounts/order"
+                createHref="/app/discounts/order/new"
                 icon="order"
                 title="Whole order"
-                description="Take a percentage off the entire order once the cart subtotal reaches an amount you set."
+                description="Take a percentage off the entire order, give free shipping, or both, once the cart subtotal reaches an amount you set."
                 status={describeCounts(counts?.order)}
               />
             </s-grid-item>
@@ -172,6 +189,7 @@ export default function HomePage() {
             <s-grid-item>
               <DiscountKindTile
                 href="/app/discounts/bxgy"
+                createHref="/app/discounts/bxgy/new"
                 icon="bxgy"
                 title="Buy X Get Y"
                 description="Buy a quantity of some products and get others free or at a discount, such as buy 2 get 1 free."
@@ -186,15 +204,9 @@ export default function HomePage() {
         <s-section heading="Your discounts">
           <s-empty-state heading="No discounts yet">
             <s-text slot="subheading">
-              Pick a discount type above to create your first one.
+              Use Create discount on a discount type above to make your first
+              one.
             </s-text>
-            <s-button
-              slot="primary-action"
-              variant="primary"
-              href="/app/discounts/new"
-            >
-              Create discount
-            </s-button>
           </s-empty-state>
         </s-section>
       ) : null}

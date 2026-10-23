@@ -159,9 +159,11 @@ own tab in the app:
 - Method (automatic or code) and kind are locked after creation.
 
 **Other pages**
-- Home: a tile per kind with counts, a table of every discount, a website link.
-- A "which kind of discount" page, used by the Home button and by the Shopify
-  admin's own create flow.
+- Home: a tile per kind with counts and two buttons, Create discount (that
+  kind's create page, skipping the "which kind" page) and View discounts; a
+  table of every discount; a website link. Home has no other create button.
+- A "which kind of discount" page, used by the Shopify admin's own create
+  flow and older links.
 - The root address `/` never stays on screen (section 5.4).
 
 ---
