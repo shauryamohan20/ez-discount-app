@@ -104,3 +104,48 @@ export function orderThresholdOutcome(
 
   return { percentage, freeShipping };
 }
+
+/**
+ * Version 8 added maxDiscountAmount: the most the discount takes off, in the
+ * shop's currency. Missing or null means no cap. A cap that is there but not
+ * a positive number is unreadable, and the discount then gives nothing,
+ * rather than taking off more than the merchant allowed.
+ */
+export function readMaxDiscountAmount(
+  value: unknown,
+): { ok: true; cap: number | null } | { ok: false } {
+  if (value === undefined || value === null) return { ok: true, cap: null };
+  if (typeof value === "number" && Number.isFinite(value) && value > 0) {
+    return { ok: true, cap: value };
+  }
+  return { ok: false };
+}
+
+/**
+ * The order discount's value: the percentage, or, when that would take off
+ * more than the cap, the cap as a fixed amount. Discount amounts are in the
+ * cart's currency, so the cap is converted with the presentment rate, the
+ * same way thresholds are. Compared in whole cents.
+ */
+export function orderDiscountValue(
+  presentmentAmount: string,
+  presentmentCurrencyRate: unknown,
+  percentage: number,
+  cap: number | null,
+): { percentage: { value: string } } | { fixedAmount: { amount: string } } {
+  const asPercentage = { percentage: { value: String(percentage) } };
+  if (cap === null) return asPercentage;
+
+  const subtotalCents = Math.round(Number(presentmentAmount) * 100);
+  if (!Number.isFinite(subtotalCents)) return asPercentage;
+
+  const rate = Number(presentmentCurrencyRate);
+  const capCents = Math.round(
+    cap * (Number.isFinite(rate) && rate > 0 ? rate : 1) * 100,
+  );
+  const discountCents = Math.round((subtotalCents * percentage) / 100);
+
+  return discountCents > capCents
+    ? { fixedAmount: { amount: (capCents / 100).toFixed(2) } }
+    : asPercentage;
+}

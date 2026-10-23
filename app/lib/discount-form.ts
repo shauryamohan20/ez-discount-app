@@ -80,6 +80,8 @@ export type DiscountFormValues = {
   customerEligibility: CustomerEligibility;
   tiers: TierRowValues[];
   orderTiers: OrderTierRowValues[];
+  /** Order thresholds only: the most taken off, empty for no cap. */
+  maxDiscountAmount: string;
   /** Used only for a Buy X Get Y discount. */
   bxgy: BxgyFormValues;
 };
@@ -101,6 +103,7 @@ export type DiscountFormErrors = {
   tiers?: string;
   rows?: Record<string, TierRowErrors>;
   orderRows?: Record<string, OrderTierRowErrors>;
+  maxDiscountAmount?: string;
   bxgy?: BxgyFormErrors;
 };
 
@@ -120,6 +123,8 @@ export type ValidatedDiscount = {
   /** Only the settings matching discountType are populated. */
   tiers: Tier[];
   orderTiers: OrderTier[];
+  /** Order thresholds only, in the shop's currency. Null means no cap. */
+  maxDiscountAmount: number | null;
   bxgy: BuyXGetY | null;
 };
 
@@ -190,6 +195,7 @@ export function blankDiscountForm(
       },
     ],
     orderTiers: [{ minSubtotal: "100", percentage: "10", freeShipping: false }],
+    maxDiscountAmount: "",
     bxgy: blankBxgyForm(),
   };
 }
@@ -204,7 +210,8 @@ export function hasErrors(errors: DiscountFormErrors): boolean {
     errors.startDate ||
     errors.endDate ||
     errors.appliesTo ||
-    errors.tiers
+    errors.tiers ||
+    errors.maxDiscountAmount
   ) {
     return true;
   }
@@ -312,6 +319,7 @@ export function validateDiscountForm(
         customerEligibility: values.customerEligibility,
         tiers: [],
         orderTiers: [],
+        maxDiscountAmount: null,
         bxgy: bxgy.value,
       },
     };
@@ -401,6 +409,22 @@ export function validateDiscountForm(
       errors.orderRows = orderRows;
     }
 
+    // Empty means no cap.
+    let maxDiscountAmount: number | null = null;
+    if (values.maxDiscountAmount.trim() !== "") {
+      const cap = parseNumber(values.maxDiscountAmount);
+      if (cap === null) {
+        errors.maxDiscountAmount =
+          "Enter an amount, or leave it empty for no limit.";
+      } else if (cap <= 0) {
+        errors.maxDiscountAmount = "Use more than 0.";
+      } else if (Number(cap.toFixed(2)) !== cap) {
+        errors.maxDiscountAmount = "Use at most 2 decimal places.";
+      } else {
+        maxDiscountAmount = cap;
+      }
+    }
+
     if (hasErrors(errors)) {
       return { ok: false, errors };
     }
@@ -423,6 +447,7 @@ export function validateDiscountForm(
         customerEligibility: values.customerEligibility,
         tiers: [],
         orderTiers: sortOrderTiers(parsedOrderTiers.map((row) => row.tier)),
+        maxDiscountAmount,
         bxgy: null,
       },
     };
@@ -560,6 +585,7 @@ export function validateDiscountForm(
       customerEligibility: values.customerEligibility,
       tiers: sortTiers(parsed.map((row) => row.tier)),
       orderTiers: [],
+      maxDiscountAmount: null,
       bxgy: null,
     },
   };
@@ -616,6 +642,7 @@ export function discountFormValuesFromFormData(
       : "all",
     tiers,
     orderTiers: orderTierRowsFromFormData(formData),
+    maxDiscountAmount: String(formData.get("maxDiscountAmount") ?? ""),
     bxgy: bxgyFromFormData(formData.get("bxgy")),
   };
 }
@@ -646,6 +673,7 @@ export function formValuesToSubmission(
     collections: JSON.stringify(values.collections),
     tiers: JSON.stringify(values.tiers),
     orderTiers: JSON.stringify(values.orderTiers),
+    maxDiscountAmount: values.maxDiscountAmount,
     bxgy: JSON.stringify(values.bxgy),
   };
 }

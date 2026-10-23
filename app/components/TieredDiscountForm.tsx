@@ -671,6 +671,25 @@ export function TieredDiscountForm({
                     {isOrderThreshold ? "Add threshold" : "Add tier"}
                   </s-button>
                 </s-stack>
+
+                {isOrderThreshold && (
+                  <s-number-field
+                    label="Maximum discount amount"
+                    name="maxDiscountAmount"
+                    value={values.maxDiscountAmount}
+                    min={0}
+                    step={1}
+                    {...(currencyCode ? { suffix: currencyCode } : {})}
+                    details="The most this discount takes off an order, whichever threshold it reaches. Leave empty for no limit."
+                    {...(errors.maxDiscountAmount
+                      ? { error: errors.maxDiscountAmount }
+                      : {})}
+                    {...(disabled ? { disabled: true } : {})}
+                    onInput={(event) =>
+                      update({ maxDiscountAmount: event.currentTarget.value })
+                    }
+                  />
+                )}
               </s-stack>
             </s-section>
           )}

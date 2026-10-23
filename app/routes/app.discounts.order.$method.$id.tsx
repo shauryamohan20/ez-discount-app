@@ -95,6 +95,12 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
     orderTiers: orderTiers.length
       ? orderTiers.map(orderTierToRow)
       : [emptyOrderTierRow()],
+    maxDiscountAmount:
+      config.status === "ok" &&
+      config.type === "order_threshold" &&
+      config.maxDiscountAmount !== null
+        ? String(config.maxDiscountAmount)
+        : "",
   };
 
   return {

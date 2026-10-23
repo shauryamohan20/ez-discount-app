@@ -9,7 +9,9 @@ import {
 } from "../generated/api";
 import { runBuyXGetY } from "./buy_x_get_y";
 import {
+  orderDiscountValue,
   orderThresholdOutcome,
+  readMaxDiscountAmount,
   shopSubtotalCents,
   validOrderTiers,
 } from "./order_threshold";
@@ -27,7 +29,8 @@ import {
  * ended. Version 2 added maxQuantity and maxDiscountedUnits. Version 3 added
  * appliesTo. Version 4 added customerEligibility. Version 5 added type.
  * Version 6 added the buy_x_get_y type, whose settings live in buy_x_get_y.ts.
- * Version 7 added freeShipping to order thresholds (see order_threshold.ts).
+ * Version 7 added freeShipping to order thresholds, and version 8 a cap on
+ * the amount taken off the order (both in order_threshold.ts).
  *
  * Every added field is optional here, so a config written by any earlier
  * version of the app still behaves the way it did then. In particular a
@@ -53,6 +56,7 @@ type TierConfig = {
   tiers?: unknown[];
   appliesTo?: AppliesTo | null;
   customerEligibility?: CustomerEligibility | null;
+  maxDiscountAmount?: unknown;
 };
 
 type Line = CartInput["cart"]["lines"][number];
@@ -256,6 +260,9 @@ function runOrderThreshold(
   const { percentage } = orderThresholdOutcome(tiers, subtotalCents);
   if (percentage <= 0) return [];
 
+  const cap = readMaxDiscountAmount(config.maxDiscountAmount);
+  if (!cap.ok) return [];
+
   return [
     {
       orderDiscountsAdd: {
@@ -263,7 +270,12 @@ function runOrderThreshold(
           {
             message: `${percentage}% OFF YOUR ORDER`,
             targets: [{ orderSubtotal: { excludedCartLineIds: [] } }],
-            value: { percentage: { value: String(percentage) } },
+            value: orderDiscountValue(
+              input.cart.cost.subtotalAmount.amount,
+              input.presentmentCurrencyRate,
+              percentage,
+              cap.cap,
+            ),
           },
         ],
         selectionStrategy: OrderDiscountSelectionStrategy.First,
@@ -281,8 +293,9 @@ export function cartLinesDiscountsGenerateRun(
   // they differ: tiers for the first two kinds, buy and get for the third.
   if (!input.cart.lines.length) return NOTHING;
 
-  const config = readConfig(input.discount.metafield?.jsonValue) as
-    TierConfig | null;
+  const config = readConfig(
+    input.discount.metafield?.jsonValue,
+  ) as TierConfig | null;
   if (!config) return NOTHING;
 
   if (

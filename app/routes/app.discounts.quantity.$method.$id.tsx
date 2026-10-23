@@ -94,6 +94,7 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
     bxgy: blankBxgyForm(),
     discountType: "quantity_tiers",
     orderTiers: [],
+    maxDiscountAmount: "",
     combinesWithOtherDiscounts: discount.combinesWithOtherDiscounts,
     title: discount.title,
     startDate:

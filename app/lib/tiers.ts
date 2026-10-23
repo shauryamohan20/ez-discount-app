@@ -33,6 +33,8 @@ export const DISCOUNT_FUNCTION_HANDLE = "tiered-discount";
  * 6: adds the buy_x_get_y type, which has buy and get settings, not tiers.
  * 7: order thresholds gain freeShipping, and may have a percentage of 0 when
  *    they give free shipping.
+ * 8: order thresholds gain maxDiscountAmount, a cap on the amount taken off
+ *    the order, in the shop's currency. Absent or null means no cap.
  *
  * Each added field is optional, so a config written by an earlier version
  * keeps the behaviour it had then and is rewritten at the current version the
@@ -40,7 +42,7 @@ export const DISCOUNT_FUNCTION_HANDLE = "tiered-discount";
  * Discounts saved by a newer version are reported as unsupported rather than
  * edited with the wrong assumptions.
  */
-export const TIER_CONFIG_VERSION = 7;
+export const TIER_CONFIG_VERSION = 8;
 
 export const MAX_TIERS = 10;
 
@@ -202,7 +204,12 @@ type ConfigCommon = {
  */
 export type TierConfig =
   | (ConfigCommon & { type: "quantity_tiers"; tiers: Tier[] })
-  | (ConfigCommon & { type: "order_threshold"; tiers: OrderTier[] })
+  | (ConfigCommon & {
+      type: "order_threshold";
+      tiers: OrderTier[];
+      /** The most the discount takes off, in the shop's currency, or null. */
+      maxDiscountAmount: number | null;
+    })
   | (ConfigCommon & { type: "buy_x_get_y"; bxgy: BuyXGetY })
   | { status: "unsupported"; reason: string };
 
@@ -226,6 +233,16 @@ function optionalInteger(
   }
 
   return { ok: false };
+}
+
+/** More than 0, finite, and at most two decimal places. */
+function isMoneyAmount(value: unknown): value is number {
+  return (
+    typeof value === "number" &&
+    Number.isFinite(value) &&
+    value > 0 &&
+    Number(value.toFixed(2)) === value
+  );
 }
 
 function normalizeOrderTier(value: unknown): OrderTier | null {
@@ -508,11 +525,22 @@ export function parseTierConfig(jsonValue: unknown): TierConfig {
   }
 
   if (type === "order_threshold") {
+    const rawCap = jsonValue.maxDiscountAmount;
+    const maxDiscountAmount =
+      rawCap === undefined || rawCap === null ? null : rawCap;
+
+    if (maxDiscountAmount !== null && !isMoneyAmount(maxDiscountAmount)) {
+      return unsupported(
+        "The saved maximum discount amount is not in a format this version of the app can read.",
+      );
+    }
+
     return {
       status: "ok",
       version,
       type,
       tiers: sortOrderTiers(normalizedOrder),
+      maxDiscountAmount,
       appliesTo,
       customerEligibility,
     };
@@ -533,6 +561,8 @@ export function serializeTierConfig(
   tiers: Tier[] | OrderTier[],
   appliesTo: AppliesTo,
   customerEligibility: CustomerEligibility,
+  /** Order thresholds only: the most the discount takes off, or null. */
+  maxDiscountAmount: number | null = null,
 ): string {
   return JSON.stringify({
     version: TIER_CONFIG_VERSION,
@@ -541,6 +571,7 @@ export function serializeTierConfig(
       type === "order_threshold"
         ? sortOrderTiers(tiers as OrderTier[])
         : sortTiers(tiers as Tier[]),
+    ...(type === "order_threshold" ? { maxDiscountAmount } : {}),
     appliesTo,
     customerEligibility,
   });

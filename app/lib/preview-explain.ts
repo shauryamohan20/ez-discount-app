@@ -98,6 +98,14 @@ export function previewOrderTiers(values: DiscountFormValues): {
   return { tiers: sortOrderTiers(tiers), skippedRows };
 }
 
+/** The cap on a whole order discount, or null when empty or not valid yet. */
+export function previewMaxDiscountAmount(
+  values: DiscountFormValues,
+): number | null {
+  const cap = parseAmount(values.maxDiscountAmount);
+  return cap !== null && cap > 0 && Number(cap.toFixed(2)) === cap ? cap : null;
+}
+
 /** The tier rows that are complete enough to run, sorted by quantity. */
 export function previewQuantityTiers(values: DiscountFormValues): {
   tiers: Tier[];
@@ -178,6 +186,7 @@ export function buildPreview(values: DiscountFormValues): PreviewSetup {
           tiers,
           ALL_PRODUCTS,
           eligibility,
+          previewMaxDiscountAmount(values),
         ),
       ),
       discountClasses: discountClassesFor("order_threshold", tiers),
@@ -350,6 +359,21 @@ export function explainOrderThresholds(
     );
   } else {
     lines.push("This cart has reached the highest threshold.");
+  }
+
+  const cap = previewMaxDiscountAmount(values);
+  if (cap !== null && reached.length) {
+    const percentage = Math.max(...reached.map((tier) => tier.percentage));
+    const uncapped = Math.round(subtotalCents * percentage) / 10000;
+    if (percentage > 0 && uncapped > cap) {
+      lines.push(
+        `The discount is capped: ${percentage}% would be ${money(uncapped)}, so it stops at ${money(cap)}.`,
+      );
+    } else {
+      lines.push(`The discount never takes off more than ${money(cap)}.`);
+    }
+  } else if (cap !== null) {
+    lines.push(`The discount never takes off more than ${money(cap)}.`);
   }
 
   lines.push(

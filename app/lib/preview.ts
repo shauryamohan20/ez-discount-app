@@ -237,9 +237,11 @@ export function runPreview({
       for (const candidate of chosen(candidates, selectionStrategy, (c) =>
         percentageOf(c.value),
       )) {
-        orderDiscountCents += Math.round(
-          (subtotalCents * percentageOf(candidate.value)) / 100,
-        );
+        // A capped discount comes back as a fixed amount instead.
+        const fixed = Number(candidate.value.fixedAmount?.amount);
+        orderDiscountCents += Number.isFinite(fixed)
+          ? toCents(fixed)
+          : Math.round((subtotalCents * percentageOf(candidate.value)) / 100);
         orderMessage = candidate.message ?? orderMessage;
       }
     }

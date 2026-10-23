@@ -91,6 +91,11 @@ own tab in the app:
   applies once the cart reaches any threshold that gives it, so spending more
   never takes it away. The discount is saved with the SHIPPING class only
   while at least one threshold gives free shipping.
+- An optional maximum discount amount for the whole discount (one cap, the
+  owner's choice over a cap per threshold), in the shop's currency. When the
+  percentage would take off more, the Function returns the cap as a fixed
+  amount, converted with `presentmentCurrencyRate`. An unreadable cap makes
+  the discount give nothing rather than take off more than allowed.
 - Thresholds are in the shop's currency. The buyer's subtotal is divided by
   `presentmentCurrencyRate` first, and money is compared in whole cents.
 - Compared against the subtotal before shipping and taxes.
@@ -193,7 +198,7 @@ own tab in the app:
 
 Namespace `$app:tiered`, both of type `json`, written in the same mutation.
 
-`config`, version 7. Older versions still load and behave as they did; the app
+`config`, version 8. Older versions still load and behave as they did; the app
 refuses to edit a version newer than it knows.
 
 ```json
@@ -204,7 +209,7 @@ refuses to edit a version newer than it knows.
 ```
 
 ```json
-{"version":7,"type":"order_threshold",
+{"version":8,"type":"order_threshold","maxDiscountAmount":300,
  "tiers":[{"minSubtotal":50,"percentage":0,"freeShipping":true},
           {"minSubtotal":100,"percentage":10,"freeShipping":true}],
  "appliesTo":{"type":"all","productIds":[],"collectionIds":[]},
@@ -232,7 +237,7 @@ refuses to edit a version newer than it knows.
 
 Version history: 1 tiers only; 2 maxQuantity and maxDiscountedUnits; 3
 appliesTo; 4 customerEligibility; 5 type; 6 buy_x_get_y; 7 freeShipping on
-order thresholds.
+order thresholds; 8 maxDiscountAmount on order thresholds.
 
 ### 5.3 The app
 
@@ -422,7 +427,7 @@ cd C:\Users\mohan\Desktop\ez-discount-app\ez-discount-app && pnpm run lint
 cd C:\Users\mohan\Desktop\ez-discount-app\ez-discount-app && pnpm run build
 ```
 
-Function tests, 97 fixtures, when the CLI works:
+Function tests, 104 fixtures, when the CLI works:
 
 ```bash
 cd C:\Users\mohan\Desktop\ez-discount-app\ez-discount-app\extensions\tiered-discount && pnpm test -- --run

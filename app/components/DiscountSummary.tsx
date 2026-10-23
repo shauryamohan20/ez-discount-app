@@ -4,6 +4,7 @@ import {
   describeBuyXGetY,
   summarizeAppliesTo,
   summarizeBuyXGetY,
+  formatThreshold,
   summarizeOrderTiers,
   summarizeTiers,
 } from "../lib/tiers";
@@ -57,7 +58,12 @@ export function DiscountSummary({ discount, titles }: Props) {
   if (config.type === "order_threshold") {
     return (
       <s-stack direction="block" gap="small-500">
-        <s-text>{summarizeOrderTiers(config.tiers)}</s-text>
+        <s-text>
+          {summarizeOrderTiers(config.tiers)}
+          {config.maxDiscountAmount === null
+            ? ""
+            : `, at most ${formatThreshold(config.maxDiscountAmount)} off`}
+        </s-text>
         <s-text color="subdued">Whole order, {customers.toLowerCase()}</s-text>
       </s-stack>
     );

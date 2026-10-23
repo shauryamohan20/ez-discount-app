@@ -404,6 +404,8 @@ export type TieredDiscountInput = {
   bxgy?: BuyXGetY | null;
   /** Save as a draft: parked so it cannot apply, with these dates kept. */
   draft?: boolean;
+  /** Order thresholds only: the most taken off, in the shop's currency. */
+  maxDiscountAmount?: number | null;
 };
 
 export type DiscountUserError = {
@@ -470,6 +472,7 @@ function configMetafieldValues(input: TieredDiscountInput): {
       input.discountType === "order_threshold" ? input.orderTiers : input.tiers,
       input.appliesTo,
       input.customerEligibility,
+      input.maxDiscountAmount ?? null,
     ),
     variables: serializeInputVariables(
       collectionVariablesForAppliesTo(input.appliesTo),
