@@ -29,14 +29,14 @@ importers:
         specifier: 7.18.2
         version: 7.18.2(react-router@7.18.2(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(supports-color@7.2.0)(typescript@5.9.3)
       '@shopify/app-bridge-react':
-        specifier: ^4.2.4
-        version: 4.2.13(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+        specifier: ^4.2.14
+        version: 4.2.14(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       '@shopify/shopify-app-react-router':
         specifier: ^3.0.0
         version: 3.0.1(react-dom@18.3.1(react@18.3.1))(react-router@7.18.2(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(react@18.3.1)
       '@shopify/shopify-app-session-storage-prisma':
-        specifier: ^11.0.0
-        version: 11.0.0(@prisma/client@6.19.3(prisma@6.19.3(typescript@5.9.3))(typescript@5.9.3))(@shopify/shopify-api@15.0.0)(@shopify/shopify-app-session-storage@7.0.0(@shopify/shopify-api@15.0.0))(prisma@6.19.3(typescript@5.9.3))
+        specifier: ^11.0.1
+        version: 11.0.1(@prisma/client@6.19.3(prisma@6.19.3(typescript@5.9.3))(typescript@5.9.3))(@shopify/shopify-api@15.0.0)(@shopify/shopify-app-session-storage@7.0.0(@shopify/shopify-api@15.0.0))(prisma@6.19.3(typescript@5.9.3))
       isbot:
         specifier: ^5.1.31
         version: 5.2.2
@@ -99,11 +99,11 @@ importers:
         specifier: ^4.6.2
         version: 4.6.2(eslint@8.57.1(supports-color@7.2.0))
       graphql-config:
-        specifier: ^5.1.1
-        version: 5.1.7(@types/node@22.20.5)(graphql@16.14.2)(typescript@5.9.3)
+        specifier: ^5.1.8
+        version: 5.1.8(@types/node@22.20.5)(graphql@16.14.2)(typescript@5.9.3)
       prettier:
-        specifier: ^3.6.2
-        version: 3.9.9
+        specifier: ^3.9.10
+        version: 3.9.10
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
@@ -1227,14 +1227,14 @@ packages:
   '@shopify/api-codegen-preset@1.2.2':
     resolution: {integrity: sha512-NizmrrrxmoIBfrGv/qvrm1ZytkGsFfeaMj14Gj+IDx6JZAK9A72jsTIyQ7DTTKWMPB6F4d7E20dygA7SEYPVEw==}
 
-  '@shopify/app-bridge-react@4.2.13':
-    resolution: {integrity: sha512-9ArXhCNRefHZwVwu/DNll1FOQPiKwPhlGs9IwE9FWw39osG+e0SNImczW4B0WF1b92sdRsTgmFkqp3Vvmi3ARg==}
+  '@shopify/app-bridge-react@4.2.14':
+    resolution: {integrity: sha512-57vIBUUbn1VBxZtujiQ2BBVDwLwCYYO8D4/ZRk/MCIzRS8SKvjrguul973CYoxDTCVRr8cshVXX9KgWoiWsbIA==}
     peerDependencies:
       react: '*'
       react-dom: '*'
 
-  '@shopify/app-bridge-types@0.7.2':
-    resolution: {integrity: sha512-Fl4GnQXzJ3h43kvD/i8e1iWP+ynIxue0L1Eezf7GVoGiIYjvu3BqX3au+kHXGx7Us6nQ4Ku6lKdFZP+nAFepCQ==}
+  '@shopify/app-bridge-types@0.7.3':
+    resolution: {integrity: sha512-zhLsMVRNNjwwLmvHPLWfKr5tRtAsr+rN7J4b6DCFMwVku2Q+zbo2DnSLnmouLBcGZrb3r6+d9vmQ4IbdXZ/Hkg==}
 
   '@shopify/graphql-client@2.0.0':
     resolution: {integrity: sha512-SfIZa6J9Px4ZSMIVdPLNupeSyqznovV6pDVxwC1rmbi0JTVj2q/CCsOf9hLQvsMdBiyJDHVnoVHGpBzlhpwO2Q==}
@@ -1260,8 +1260,8 @@ packages:
       react-dom: '>=18'
       react-router: ^7.6.2
 
-  '@shopify/shopify-app-session-storage-prisma@11.0.0':
-    resolution: {integrity: sha512-NQzJ/WsWYIj0oW/ZZUd255CSVFjIFY+4lyLs6UkM4GdH4KEudaAuCf/oBvaO52tc2rgb4i/PWgvRppDovYJUUA==}
+  '@shopify/shopify-app-session-storage-prisma@11.0.1':
+    resolution: {integrity: sha512-foafXTxvOSgVJZGxLQiJ7e9MW3XwOX1SlJZOwcZTWrKJ0gNkMCSTyt1Pd0763W0tYaR847U90RcPxkAQ5k709A==}
     peerDependencies:
       '@prisma/client': ^6.19.0
       '@shopify/shopify-api': ^15.0.0
@@ -2460,8 +2460,8 @@ packages:
       cosmiconfig-toml-loader:
         optional: true
 
-  graphql-config@5.1.7:
-    resolution: {integrity: sha512-7/2bD8fvACyXiRkuwgVE5U+WAVyBgcL2h85+FeafAMZRs1mZhZSzioSnJ3pWnh+EA50y8VdQRntF7jX5aznMIg==}
+  graphql-config@5.1.8:
+    resolution: {integrity: sha512-7DyT4ctUiNRMAU19IFy8o1zoQCJPjik1/vBwWIZlILGI6O1mHZXd59rUzF81oglNyHtPrNNCWonqfwu58BG66A==}
     engines: {node: '>= 16.0.0'}
     peerDependencies:
       cosmiconfig-toml-loader: ^1.0.0
@@ -3249,8 +3249,8 @@ packages:
     resolution: {integrity: sha512-vkcDPrRZo1QZLbn5RLGPpg/WmIQ65qoWWhcGKf/b5eplkkarX0m9z8ppCat4mlOqUsWpyNuYgO3VRyrYHSzX5g==}
     engines: {node: '>= 0.8.0'}
 
-  prettier@3.9.9:
-    resolution: {integrity: sha512-Z/CJHIkdujO/OtN7nXUii0Rf3VT5SRuhjBA82Xvu2XhBUgX3nhP67T0LHceBdQLex7OOFGTox+Q5Yg8Jk2Qivg==}
+  prettier@3.9.10:
+    resolution: {integrity: sha512-skGHTH1Yb9QvaTC4hWnRTzEYtCpApF0UMBPz+t/0ZPzP8ihefo/btKd+QA7pUE0fEwA1SbS/NmhyEcstdXOIdA==}
     engines: {node: '>=14'}
     hasBin: true
 
@@ -4353,7 +4353,7 @@ snapshots:
       debounce: 1.2.1
       detect-indent: 6.1.0
       graphql: 16.14.2
-      graphql-config: 5.1.7(@types/node@22.20.5)(graphql@16.14.2)(typescript@5.8.3)
+      graphql-config: 5.1.8(@types/node@22.20.5)(graphql@16.14.2)(typescript@5.8.3)
       inquirer: 8.2.7(@types/node@22.20.5)
       is-glob: 4.0.3
       jiti: 1.21.7
@@ -4406,7 +4406,7 @@ snapshots:
       debounce: 1.2.1
       detect-indent: 6.1.0
       graphql: 16.14.2
-      graphql-config: 5.1.7(@types/node@22.20.5)(graphql@16.14.2)(typescript@5.9.3)
+      graphql-config: 5.1.8(@types/node@22.20.5)(graphql@16.14.2)(typescript@5.9.3)
       inquirer: 8.2.7(@types/node@22.20.5)
       is-glob: 4.0.3
       jiti: 1.21.7
@@ -5187,7 +5187,7 @@ snapshots:
       pathe: 1.1.2
       picocolors: 1.1.1
       pkg-types: 2.3.3
-      prettier: 3.9.9
+      prettier: 3.9.10
       react-refresh: 0.14.2
       react-router: 7.18.2(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       semver: 7.8.5
@@ -5356,13 +5356,13 @@ snapshots:
       - typescript
       - utf-8-validate
 
-  '@shopify/app-bridge-react@4.2.13(react-dom@18.3.1(react@18.3.1))(react@18.3.1)':
+  '@shopify/app-bridge-react@4.2.14(react-dom@18.3.1(react@18.3.1))(react@18.3.1)':
     dependencies:
-      '@shopify/app-bridge-types': 0.7.2
+      '@shopify/app-bridge-types': 0.7.3
       react: 18.3.1
       react-dom: 18.3.1(react@18.3.1)
 
-  '@shopify/app-bridge-types@0.7.2':
+  '@shopify/app-bridge-types@0.7.3':
     dependencies:
       '@standard-schema/spec': 1.1.0
 
@@ -5403,7 +5403,7 @@ snapshots:
       react-dom: 18.3.1(react@18.3.1)
       react-router: 7.18.2(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
 
-  '@shopify/shopify-app-session-storage-prisma@11.0.0(@prisma/client@6.19.3(prisma@6.19.3(typescript@5.9.3))(typescript@5.9.3))(@shopify/shopify-api@15.0.0)(@shopify/shopify-app-session-storage@7.0.0(@shopify/shopify-api@15.0.0))(prisma@6.19.3(typescript@5.9.3))':
+  '@shopify/shopify-app-session-storage-prisma@11.0.1(@prisma/client@6.19.3(prisma@6.19.3(typescript@5.9.3))(typescript@5.9.3))(@shopify/shopify-api@15.0.0)(@shopify/shopify-app-session-storage@7.0.0(@shopify/shopify-api@15.0.0))(prisma@6.19.3(typescript@5.9.3))':
     dependencies:
       '@prisma/client': 6.19.3(prisma@6.19.3(typescript@5.9.3))(typescript@5.9.3)
       '@shopify/shopify-api': 15.0.0
@@ -6899,14 +6899,14 @@ snapshots:
       - typescript
       - utf-8-validate
 
-  graphql-config@5.1.7(@types/node@22.20.5)(graphql@16.14.2)(typescript@5.8.3):
+  graphql-config@5.1.8(@types/node@22.20.5)(graphql@16.14.2)(typescript@5.8.3):
     dependencies:
       '@graphql-tools/graphql-file-loader': 8.1.22(graphql@16.14.2)
       '@graphql-tools/json-file-loader': 8.0.36(graphql@16.14.2)
       '@graphql-tools/load': 8.1.19(graphql@16.14.2)
       '@graphql-tools/merge': 9.2.6(graphql@16.14.2)
       '@graphql-tools/url-loader': 9.1.12(@types/node@22.20.5)(graphql@16.14.2)
-      '@graphql-tools/utils': 11.2.2(graphql@16.14.2)
+      '@graphql-tools/utils': 12.0.3(graphql@16.14.2)
       cosmiconfig: 8.3.6(typescript@5.8.3)
       graphql: 16.14.2
       jiti: 2.7.0
@@ -6921,14 +6921,14 @@ snapshots:
       - typescript
       - utf-8-validate
 
-  graphql-config@5.1.7(@types/node@22.20.5)(graphql@16.14.2)(typescript@5.9.3):
+  graphql-config@5.1.8(@types/node@22.20.5)(graphql@16.14.2)(typescript@5.9.3):
     dependencies:
       '@graphql-tools/graphql-file-loader': 8.1.22(graphql@16.14.2)
       '@graphql-tools/json-file-loader': 8.0.36(graphql@16.14.2)
       '@graphql-tools/load': 8.1.19(graphql@16.14.2)
       '@graphql-tools/merge': 9.2.6(graphql@16.14.2)
       '@graphql-tools/url-loader': 9.1.12(@types/node@22.20.5)(graphql@16.14.2)
-      '@graphql-tools/utils': 11.2.2(graphql@16.14.2)
+      '@graphql-tools/utils': 12.0.3(graphql@16.14.2)
       cosmiconfig: 8.3.6(typescript@5.9.3)
       graphql: 16.14.2
       jiti: 2.7.0
@@ -7684,7 +7684,7 @@ snapshots:
 
   prelude-ls@1.2.1: {}
 
-  prettier@3.9.9: {}
+  prettier@3.9.10: {}
 
   prisma@6.19.3(typescript@5.9.3):
     dependencies:
